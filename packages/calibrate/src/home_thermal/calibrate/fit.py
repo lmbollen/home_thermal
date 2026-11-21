@@ -12,6 +12,7 @@ per `autocorr_h` hours; otherwise the priors would be ignored.
 """
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -27,7 +28,7 @@ from home_thermal.core import (
     check_sensors,
     default_free,
     defaults,
-    dhw_steps,
+    dhw_hours,
     gas_power,
     parameter_set,
     prepare,
@@ -72,14 +73,21 @@ def meter_heat_true(df: pd.DataFrame, p: dict) -> pd.Series:
 
 
 def data_terms(cfg: dict, df: pd.DataFrame) -> set[str]:
-    """Heat-source data terms this house and data support: 'heat meter', 'electricity', 'gas'."""
+    """Heat-source data terms this house and data support: 'heat meter', 'electricity', 'gas'
+    (a term needs its columns to hold data, not just exist)."""
+    def has(*cols):
+        return all(c in df and df[c].notna().any() for c in cols)
     terms = set()
-    if "HP_heat_W" in df:
+    if has("HP_heat_W"):
         terms.add("heat meter")
     if cfg["boiler"] is not None:
-        if cfg["boiler"]["gas_column"] in df:
+        if has(cfg["boiler"]["gas_column"]):
             terms.add("gas")
-    elif {"HP_elec_W", "T_flow"} <= set(df.columns):
+            flag = cfg["boiler"]["dhw_flag"]
+            if flag and flag not in df:
+                warnings.warn(f"boiler.dhw_flag column {flag!r} is not in the data: only hours without "
+                              "any heating are recognised as tap-water hours", stacklevel=3)
+    elif has("HP_elec_W", "T_flow"):
         terms.add("electricity")
     return terms
 
@@ -110,7 +118,7 @@ def _errors(cfg, net, X, Q, df, keep, hourly_rooms: bool) -> dict:
         e = HeatPump.from_config(cfg, net.p).electric_hourly(Q, df) - df["HP_elec_W"].resample("1h").mean()
         out["HP electricity (W, hourly)"] = ("heat source", e[full_hours].dropna())
     if "gas" in terms:
-        no_dhw = ~dhw_steps(cfg, df).resample("1h").max().astype(bool)
+        no_dhw = ~dhw_hours(cfg, df)
         pred = pd.Series(Boiler.from_config(cfg, net.p).fuel(Q), index=df.index).resample("1h").mean()
         e = pred - gas_power(cfg, df).resample("1h").mean()
         out["gas (W, hourly)"] = ("heat source", e[full_hours & no_dhw].dropna())
@@ -163,6 +171,9 @@ def fit(cfg: dict, df: pd.DataFrame, free: list | None = None, base: dict | None
     check_names(cfg, base or {})
     terms = data_terms(cfg, df) if use_heat else set()
     free = [n for n in free if DATA_TERM_PARAMS.get(n, "always") in terms | {"always"}]
+    proxy = cfg["solar"]["proxy"]
+    if not (proxy in df and df[proxy].notna().any()):
+        free = [n for n in free if n != "g_sol"]          # no solar proxy: no solar gain to fit
     base = {**defaults(cfg), **(base or {})}
     if not free:
         return FitResult(base, [], {}, None, 0.0, 0, [])

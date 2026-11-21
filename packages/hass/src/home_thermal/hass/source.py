@@ -40,7 +40,9 @@ class HassConfig:
     nominal_flow: float = 900.0          # statistics only: typical flow while running (L/h)
     water_sensor_offset_K: float = 0.0   # flow reads this much above return at standstill
     pv_energy: str | None = None         # energy counter column (kWh) to derive PV_W from
-    gas_counter: str | None = None       # gas meter counter column (m3, total) to derive gas_m3 per step from
+    gas_counter: str | None = None       # gas meter total column (m3 or kWh) to derive gas per step from
+    gas_column: str = "gas_m3"           # output column: gas used per step, in the counter's unit
+    gas_max_per_h: float = 10.0          # larger hourly increases are glitches (~100 kW), not gas use
     pump_running_W: dict = field(default_factory=dict)   # statistics: pump col -> {power: col, running_W: W}
     household_power: dict | None = None  # {column, plus: [...], minus: [...]}
     statistics_start: str | None = None
@@ -109,6 +111,13 @@ def _heat_per_K(df: pd.DataFrame, min_dT: float) -> pd.Series:
     return (df["HP_heat_W"] / dT).where((dT > min_dT) & (df["HP_heat_W"] > 0), 0.0)
 
 
+def _counter_steps(total: pd.Series, max_step: float) -> pd.Series:
+    """Per-step use from a cumulative counter on a regular grid. A drop (reset, meter replaced,
+    glitch reading) and implausibly large jumps (the glitch recovering) become NaN, not use."""
+    d = total - total.shift(1)
+    return d.where((d >= 0) & (d <= max_step))
+
+
 def _has(df, *cols):
     return all(c in df for c in cols)
 
@@ -156,7 +165,7 @@ def load_states(db, cfg: HassConfig, step: str = "15min") -> pd.DataFrame:
     out = df.resample(step).mean()
     if cfg.gas_counter and cfg.gas_counter in df:
         g_end = df[cfg.gas_counter].resample(step).last()
-        out["gas_m3"] = (g_end - g_end.shift(1)).clip(lower=0)
+        out[cfg.gas_column] = _counter_steps(g_end, cfg.gas_max_per_h * pd.Timedelta(step) / pd.Timedelta("1h"))
     if cfg.pv_energy and cfg.pv_energy in df:
         hours = pd.Timedelta(step).total_seconds() / 3600
         e_end = df[cfg.pv_energy].resample(step).last()
@@ -211,13 +220,18 @@ def load_statistics(db, cfg: HassConfig, start=None, end=None, step: str = "15mi
     raw.loc[raw.u == "kW", ["v", "vmin"]] *= 1000.0       # power statistics may be stored in kW
     piv = {k: raw.pivot_table(index="t", columns="col", values=k, aggfunc="mean").sort_index()
            for k in ("v", "vmin", "vsum")}
-    h = piv["v"]
+    # counters (gas, PV energy) have only 'sum' statistics: index over all rows
+    h = piv["v"].reindex(piv["v"].index.union(piv["vsum"].index))
     if start is not None:
         h = h[h.index >= _utc(start)]
     if end is not None:
         h = h[h.index < _utc(end)]
-    if h.empty:
+    if len(h.index) == 0:
         raise ValueError(f"load_statistics: no statistics between {start} and {end}")
+    if len(h.index) == 0:
+        raise ValueError(f"load_statistics: no statistics between {start} and {end}")
+    # a complete hourly grid, so counter differences across a gap stay missing (not lumped)
+    h = h.reindex(pd.date_range(h.index[0], h.index[-1], freq="1h"))
     hmin, hsum = piv["vmin"].reindex(h.index), piv["vsum"].reindex(h.index)
     for pump, spec in cfg.pump_running_W.items():
         if spec["power"] in h:
@@ -233,14 +247,14 @@ def load_statistics(db, cfg: HassConfig, start=None, end=None, step: str = "15mi
         if "circ" in h:
             h["T_water"] = ((h["T_flow"] + h["T_return"]) / 2).where(h["circ"] > 0.05)
     if cfg.pv_energy and cfg.pv_energy in hsum:
-        h["PV_W"] = (hsum[cfg.pv_energy] - hsum[cfg.pv_energy].shift(1)).clip(lower=0) * 1000.0
+        h["PV_W"] = _counter_steps(hsum[cfg.pv_energy], 100.0) * 1000.0
     # each hourly row covers [t, t+1h): spread it over that hour only; missing hours stay NaN
     h = h.reindex(pd.date_range(h.index[0], h.index[-1], freq="1h"))
     idx = pd.date_range(h.index[0], h.index[-1] + pd.Timedelta("1h") - pd.Timedelta(step), freq=step)
     per_hour = int(pd.Timedelta("1h") / pd.Timedelta(step))
     if cfg.gas_counter and cfg.gas_counter in hsum:
         # an amount, not a rate: the hour's m3 is shared over its steps
-        h["gas_m3"] = (hsum[cfg.gas_counter] - hsum[cfg.gas_counter].shift(1)).clip(lower=0) / max(per_hour, 1)
+        h[cfg.gas_column] = _counter_steps(hsum[cfg.gas_counter], cfg.gas_max_per_h) / max(per_hour, 1)
     return h.reindex(idx, method="ffill", limit=max(per_hour - 1, 0)) if per_hour > 1 else h.reindex(idx)
 
 

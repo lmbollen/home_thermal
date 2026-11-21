@@ -173,14 +173,23 @@ parameters:
 ```
 
 Calibration then compares hourly gas use with the modelled heat ÷ `eta_boiler`. The gas meter is
-a strong anchor: it pins the house's heat demand, and with it `H_house`. Hours in which a combi
-boiler heated tap water are left out: hours with `dhw_flag` set, and hours in which gas burned
-while no heating water circulated (`circ` = 0).
+a strong extra constraint on the house's heat demand, and so on `H_house` (in tests it brought a
+deliberately wrong prior to within ~5 % of the truth; heat can still hide in the background gain
+and the ground/neighbour paths).
 
-`eta_boiler` is **fixed** by default. Room temperatures and gas together only determine
-heat ÷ efficiency, so set its prior from the boiler type instead: modern condensing boiler running
-at low flow temperatures 0.90-0.95, condensing boiler with high flow temperatures (> 55 °C return)
-0.85, old non-condensing 0.75-0.80 (all on the upper calorific value, as gas bills use).
+**Tap water.** Gas used for tap water must be kept out: whole hours are left out when the
+`dhw_flag` column is set in any step (OpenTherm "DHW active", a three-way valve position, a
+cylinder thermostat), and when gas burned while the heating did not run at all that hour. Short
+draws inside heating hours are only found with the flag, so configure one if you can, for combi
+boilers and for system boilers that reheat a hot-water cylinder alike. (The `dhw:` section is for
+a separate heat-pump water heater, not for a boiler's cylinder.)
+
+**Efficiency.** `eta_boiler` is **fixed** by default. Room temperatures and gas mostly determine
+heat ÷ efficiency, and efficiency trades off against the radiator output (`m_rad`), so set its
+prior from the boiler type: modern condensing boiler at low flow temperatures 0.90-0.95,
+condensing boiler with high flow temperatures (> 55 °C return) 0.85, old non-condensing
+0.75-0.80 (all on the upper calorific value, as gas bills use). You can free it
+(`--free eta_boiler`); check on held-out data that it helps.
 
 You need `T_flow` (or `T_water`) and `circ` (1 while the boiler's heating pump runs, e.g. from
 OpenTherm or a smart plug on the pump). See the

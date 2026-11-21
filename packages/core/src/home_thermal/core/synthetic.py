@@ -72,15 +72,16 @@ class _Thermostats:
 
 def synthetic_data(cfg: dict, true_params: dict | None = None, days: float = 10, step: str = "15min",
                    start: str = "2026-01-05", seed: int = 0, noise_K: float = 0.05,
-                   solar: bool = True, heat_pump: bool = True) -> pd.DataFrame:
+                   solar: bool = True, heat_source: bool = True, tap_water: bool | None = None) -> pd.DataFrame:
     """Simulate the house with `true_params` (others at their prior) under cold weather, with
     simple thermostats aiming at 20 C (comfort hours) / 17 C, and return a DataFrame in the input
     format, sensors included (plus noise_K measurement noise).
 
     solar: include a sunshine proxy column (cfg solar.proxy, W) and sun.
-    heat_pump: include the heat-source measurements: for a house with a `boiler`, its gas column
-        (with eta_boiler from true_params, plus tap-water gas in morning showers, flagged in the
-        dhw_flag column if one is configured); otherwise HP_heat_W and HP_elec_W (eta 0.5)."""
+    heat_source: include the heat-source measurements: for a house with a `boiler`, its gas column
+        (efficiency eta_boiler from true_params); otherwise HP_heat_W and HP_elec_W (eta 0.5).
+    tap_water: boiler only: a 15-minute morning shower heated by the boiler (no space heating
+        meanwhile), flagged in boiler.dhw_flag. Default: only if a dhw_flag is configured."""
     rng = np.random.default_rng(seed)
     n = int(pd.Timedelta(f"{days}D") / pd.Timedelta(step))
     if n < 2:
@@ -117,7 +118,10 @@ def synthetic_data(cfg: dict, true_params: dict | None = None, days: float = 10,
     net = Network(cfg, dict(true_params or {}))
     # combi boiler: a 15-min morning shower, during which it does not heat the house
     shower = ((hod >= 7) & (hod < 7.25)).astype(float)
-    tap = shower if (heat_pump and cfg["boiler"] is not None) else np.zeros(n)
+    boiler = cfg["boiler"] is not None and heat_source
+    if tap_water is None:
+        tap_water = boiler and bool(cfg["boiler"]["dhw_flag"])
+    tap = shower if (boiler and tap_water) else np.zeros(n)
     thermostats = _Thermostats(net, comfort, rng, tap > 0)
     X, Q = simulate(net, df, controller=thermostats)
     log = pd.DataFrame(thermostats.log, index=idx)
@@ -125,7 +129,7 @@ def synthetic_data(cfg: dict, true_params: dict | None = None, days: float = 10,
     S = sensor_temps(net, X, df)
     for c in S.columns:
         df[c] = S[c] + rng.normal(0, noise_K, n)
-    if heat_pump and cfg["boiler"] is not None:
+    if boiler:
         b = cfg["boiler"]
         fuel = Boiler.from_config(cfg, net.p).fuel(Q) + tap * 20000.0      # combi boiler on tap water
         step_h = pd.Timedelta(step).total_seconds() / 3600
@@ -133,7 +137,7 @@ def synthetic_data(cfg: dict, true_params: dict | None = None, days: float = 10,
         df[b["gas_column"]] = fuel * per_step
         if b["dhw_flag"]:
             df[b["dhw_flag"]] = tap
-    elif heat_pump:
+    elif heat_source:
         df["HP_heat_W"] = Q
         df["HP_elec_W"] = HeatPump(eta=0.5).electric(Q, df["T_out"], df["T_flow"])
     return df

@@ -2,8 +2,8 @@
 calorific value, which is what gas bills and meters use).
 
 Gas data comes as an amount per step (m3 or kWh) or as power (W); `gas_power` converts it to W.
-Combination boilers also heat tap water with the same gas; `dhw_steps` marks those steps so that
-calibration can leave them out.
+Boilers also heat tap water with the same gas (combi boilers directly, system boilers by reheating a
+cylinder); `dhw_hours` marks hours with tap-water heating so that calibration can leave them out.
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-BURNING_W = 50.0    # gas power above which the burner counts as on
+BURNING_W = 100.0   # hourly mean gas power above which the burner counted as on (~0.01 m3/h)
 
 
 @dataclass
@@ -39,14 +39,16 @@ def gas_power(cfg: dict, df: pd.DataFrame) -> pd.Series:
     return kwh * 1000.0 / step_h
 
 
-def dhw_steps(cfg: dict, df: pd.DataFrame) -> pd.Series:
-    """Steps where the boiler (probably) heated tap water: the dhw_flag column if configured,
-    plus steps with gas use while no heating water circulated."""
+def dhw_hours(cfg: dict, df: pd.DataFrame) -> pd.Series:
+    """Hours (hourly index) in which the boiler heated tap water:
+    - any step with the `dhw_flag` column set (the reliable way: OpenTherm 'DHW active', a
+      three-way valve position, a cylinder thermostat), and
+    - hours in which gas burned while the heating did not run at all (circ 0 all hour).
+    Short draws inside heating hours are only found with the flag."""
     b = cfg["boiler"]
-    if b["dhw_flag"] and b["dhw_flag"] in df:
-        flag = df[b["dhw_flag"]].fillna(0) > 0
-    else:
-        flag = pd.Series(False, index=df.index)
-    burning = gas_power(cfg, df).fillna(0) > BURNING_W
-    no_heating = df["circ"].fillna(0) <= 0 if "circ" in df else pd.Series(False, index=df.index)
-    return flag | (burning & no_heating)
+    hourly = df.resample("1h")
+    flag = (df[b["dhw_flag"]].fillna(0) > 0).resample("1h").max() if b["dhw_flag"] in df else False
+    burning = gas_power(cfg, df).fillna(0).resample("1h").mean() > BURNING_W
+    no_heating = hourly["circ"].max().fillna(0) <= 0 if "circ" in df else False
+    out = burning & no_heating
+    return (out | flag).astype(bool) if isinstance(flag, pd.Series) else out.astype(bool)

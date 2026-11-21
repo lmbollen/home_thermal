@@ -61,7 +61,12 @@ API, 48 h in the CLI and in `cross_validate`):
 - heat-meter output if `HP_heat_W` is present, σ = 800 W (meters are often biased; weak),
 - heat-pump electricity if `HP_elec_W` and `T_flow` are present, σ = 100 W (reliable; strong),
 - boiler gas if the house has a `boiler` and the data its gas column, σ = 150 W (strong): modelled
-  heat ÷ `eta_boiler` against the gas meter, leaving out hours with tap-water heating.
+  heat ÷ `eta_boiler` against the gas meter, leaving out hours with tap-water heating (see
+  [configuration.md](configuration.md#boiler)).
+
+A data term is used only when its columns hold data; parameters that only a missing term could
+constrain (`eta_hp`, `eta_boiler`, `k_meter`, ...) stay at their prior, and `g_sol` stays at its
+prior without a solar proxy column.
 
 Model errors are autocorrelated over hours, so the data term is down-weighted to about one
 independent sample per 6 hours (`FitSettings.autocorr_h`). Otherwise the priors would be ignored.

@@ -6,7 +6,7 @@
     states, heat = simulate(net, read_csv("data.csv"))
 """
 from .analysis import coupling, energy_balance, simulate_detailed
-from .boiler import Boiler, dhw_steps, gas_power
+from .boiler import Boiler, dhw_hours, gas_power
 from .config import ConfigError, load_house, normalise
 from .data import check_inputs, check_sensors, prepare, read_csv, required_columns, step_seconds
 from .heatpump import HeatPump
@@ -34,7 +34,7 @@ from .simulate import initial_state, simulate
 
 __all__ = [
     "Boiler", "check_inputs", "check_names", "check_sensors", "complete", "ConfigError", "coupling",
-    "DATA_TERM_PARAMS", "default_free", "defaults", "dhw_steps", "emitter_heat", "energy_balance",
+    "DATA_TERM_PARAMS", "default_free", "defaults", "dhw_hours", "emitter_heat", "energy_balance",
     "free_gains", "gas_power", "HEAT_PUMP_PARAMS", "HeatPump", "initial_state", "load_house", "Network",
     "normalise", "Param", "parameter_set", "prepare", "radiator_heat", "read_csv", "required_columns",
     "sensor_lag", "sensor_temps", "simulate", "simulate_detailed", "step_seconds", "valve_sensor_warming",

@@ -97,6 +97,15 @@ def cmd_demo(args):
     print(f"the data was generated with these parameters (others at their prior); true H_house {h_true:.0f} W/K")
 
 
+def cmd_synth(args):
+    from home_thermal.core.synthetic import synthetic_data
+    cfg = load_house(args.house)
+    truth = json.loads(args.truth) if args.truth else {}
+    df = synthetic_data(cfg, truth, days=args.days, seed=args.seed, solar=not args.no_solar)
+    df.to_csv(_out_path(args.out))
+    print(f"wrote {args.out} ({len(df)} rows); true H_house {Network(cfg, truth).H_house():.0f} W/K")
+
+
 def cmd_hass_fetch(args):
     from home_thermal.hass import HassConfig, fetch_db
     print(fetch_db(HassConfig.load(args.hass), args.dest))
@@ -204,6 +213,13 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("out")
     s.add_argument("--days", type=float, default=12)
     s.add_argument("--seed", type=int, default=0)
+    s = p("synth", cmd_synth, "synthetic data for your own house config (known 'true' parameters)")
+    s.add_argument("house")
+    s.add_argument("out")
+    s.add_argument("--truth", default="", help='true parameters as JSON, e.g. \'{"m_env": 1.2}\' (default: priors)')
+    s.add_argument("--days", type=float, default=10)
+    s.add_argument("--seed", type=int, default=0)
+    s.add_argument("--no-solar", action="store_true", help="no solar proxy column")
     s = p("hass-fetch", cmd_hass_fetch, "copy the Home Assistant recorder DB over ssh (read-only)")
     s.add_argument("hass")
     s.add_argument("--dest", default="data/ha_db")

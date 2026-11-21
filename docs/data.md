@@ -94,8 +94,11 @@ All keys: `HassConfig` in [source.py](../packages/hass/src/home_thermal/hass/sou
   computes heat from the raw sensors, also set the same value as the prior of `dT_off` in the
   house config (`parameters: {dT_off: {prior: 0.85}}`).
 - `pv_energy`: derive `PV_W` from an energy counter (kWh) instead of a power sensor.
-- `gas_counter`: the column of a gas meter's total (m³, e.g. from the P1/DSMR integration);
-  `gas_m3` per step is derived from it (also from the hourly statistics).
+- `gas_counter`: the column of a gas meter's total (e.g. from the P1/DSMR integration); gas per
+  step is derived from it into `gas_column` (default `gas_m3`; use the counter's unit in the house
+  config's `boiler.gas_unit`). Hourly statistics are shared evenly over the hour's steps; hours
+  missing from the statistics stay missing. Counter drops (meter replaced, glitches) and jumps
+  above `gas_max_per_h` (default 10 per hour) are treated as missing, not as use.
 
 ```bash
 home-thermal hass-fetch homeassistant.yaml --dest data/ha_db       # copy the DB over ssh
@@ -112,6 +115,7 @@ the Python API. Nothing else in the library depends on where the data comes from
 
 ## Synthetic data
 
-`home_thermal.core.synthetic.synthetic_data(cfg, true_params, days=10, solar=True, heat_pump=True)`
-generates data for any house config from known parameters, with simple thermostats. Use it to
-try a config before you have data, or to see which parameters your measurements can identify.
+`home-thermal synth house.yaml data.csv --truth '{"m_env": 1.2}'` (or
+`home_thermal.core.synthetic.synthetic_data(cfg, true_params, days=10, solar=True, heat_source=True)`)
+generates data for any house config from known parameters, with simple thermostats. Use it to try
+a config before you have data, or to see which parameters your measurements can identify.

@@ -1,0 +1,53 @@
+# Home Assistant data source for the semi-detached example (home_thermal.hass.HassConfig).
+# Left: the data column the house config uses. Right: the Home Assistant entity.
+host: root@homeassistant.local      # ssh target for `home-thermal hass-fetch` (SSH add-on)
+ssh_key: ~/.ssh/id_homeassistant
+
+entities:
+  T_woonkamer:  sensor.wireless_temperature_sensor_x_temperatuur      # wall sensor
+  T_badkamer:   sensor.smart_radiator_thermostat_x_temperatuur        # valve-mounted
+  T_hobbykamer: sensor.smart_radiator_thermostat_x_temperatuur_2
+  T_inloopkast: sensor.smart_radiator_thermostat_x_temperatuur_3
+  T_zolder:     sensor.smart_radiator_thermostat_x_temperatuur_4
+  T_slaapkamer: sensor.smart_radiator_thermostat_x_temperatuur_5
+  T_berging:    sensor.berging_aurora_iii_room_temperature            # heat pump controller in the shed
+  T_out:        sensor.berging_aurora_iii_outdoor_temperature
+  V_woonkamer:  sensor.woonkamer_heating_power                        # thermostat valve / heating %
+  V_badkamer:   sensor.badkamer_heating_power
+  V_hobbykamer: sensor.hobbykamer_heating_power
+  V_inloopkast: sensor.inloopkast_heating_power
+  V_zolder:     sensor.zolder_heating_power
+  V_slaapkamer: sensor.slaapkamer_heating_power
+  UFH_A:        switch.grillplats_plug                                # living-room floor pump (smart plug)
+  UFH_B:        switch.grillplats_plug_2                              # utility/shed floor pump
+  HP_heat_W:    sensor.berging_aurora_iii_heat_output
+  HP_elec_W:    sensor.berging_aurora_iii_power
+  T_flow:       sensor.berging_aurora_iii_water_outlet_temperature
+  T_return:     sensor.berging_aurora_iii_water_inlet_temperature
+  water_flow:   sensor.berging_aurora_iii_water_flow                  # L/h
+  PV_kWh:       sensor.grillplats_plug_energie_4                      # PV energy counter -> PV_W
+  DHW_W:        sensor.grillplats_plug_vermogen_3                     # hot-water heat pump (smart plug)
+  P_ufh_A:      sensor.grillplats_plug_vermogen
+  P_ufh_B:      sensor.grillplats_plug_vermogen_2
+  P1_W:         sensor.p1_meter_vermogen                              # grid meter (net)
+
+setpoints:      # climate entities; the setpoint is their 'temperature' attribute
+  SP_woonkamer:  climate.wireless_temperature_sensor_x
+  SP_badkamer:   climate.smart_radiator_thermostat_x
+  SP_hobbykamer: climate.smart_radiator_thermostat_x_2
+  SP_inloopkast: climate.smart_radiator_thermostat_x_3
+  SP_zolder:     climate.smart_radiator_thermostat_x_4
+  SP_slaapkamer: climate.smart_radiator_thermostat_x_5
+  SP_berging:    climate.vvv_bijkeuken
+setpoint_off: 5.0
+
+flow_column: water_flow
+circulating_above: 100       # L/h
+nominal_flow: 900            # L/h, statistics only
+water_sensor_offset_K: 0.85  # flow sensor reads 0.85 K above return at standstill (measured)
+pv_energy: PV_kWh
+pump_running_W:              # statistics only: pump on-fraction = plug power / running power
+  UFH_A: {power: P_ufh_A, running_W: 17.6}
+  UFH_B: {power: P_ufh_B, running_W: 8.4}
+household_power: {column: P_app_W, plus: [P1_W, PV_W], minus: [HP_elec_W, DHW_W, P_ufh_A, P_ufh_B]}
+statistics_start: "2026-11-06 12:00"   # hourly statistics before the ~10-day states window

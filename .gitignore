@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+# your own data and results stay local
+data/
+results/
+*.db
+*.db-wal
+*.db-shm
+*.csv
+!tests/**/*.csv

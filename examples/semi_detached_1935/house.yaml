@@ -1,0 +1,143 @@
+# Semi-detached house, built 1935, renovated ~1990s. The house this library
+# was developed on. Air-water heat pump, floor heating downstairs, radiators upstairs with smart
+# radiator thermostats (valve-mounted sensors), a heated shed with the heat pump's indoor parts and
+# a water/water hot-water heat pump.
+# Every number is a PRIOR from the energy label, the renovation drawing and owner's notes;
+# calibration scales groups of them. U in W/m2K, areas in m2, UA in W/K.
+name: semi-detached 1935
+
+boundaries:              # priors of the fitted boundary temperatures
+  T_neighbour: 16.0      # heated neighbour, but their hall/stair is behind much of the party wall
+  T_ground: 11.0         # crawl space / ground under the floor in November
+
+parameters:
+  dT_off: {prior: 0.85}  # heat meter's flow sensor reads 0.85 K above return at standstill (measured)
+
+zones:
+  woonkamer:   {area: 40.0, volume: 100, ach: 0.8, sensor: T_woonkamer}     # living + kitchen
+  hal:         {area: 13.0, volume: 33,  ach: 1.0, occupied: false}         # hall + stairs + landing, unheated
+  bijkeuken:   {area: 9.9,  volume: 25,  ach: 0.5}                          # utility room + toilet
+  berging:     {area: 14.0, volume: 35,  ach: 0.5, sensor: T_berging, occupied: false, in_house_loss: false}  # heated shed
+  slaapkamer:  {area: 14.0, volume: 34,  ach: 0.8, sensor: T_slaapkamer}    # bedroom
+  hobbykamer:  {area: 9.0,  volume: 22,  ach: 0.8, sensor: T_hobbykamer}
+  inloopkast:  {area: 10.0, volume: 24,  ach: 0.8, sensor: T_inloopkast}    # walk-in closet
+  badkamer:    {area: 5.0,  volume: 12,  ach: 0.8, sensor: T_badkamer}      # bathroom
+  zolder:      {area: 20.0, volume: 40,  ach: 1.0, sensor: T_zolder}        # attic
+
+# kind: wall | window | door | roof | floor (to ground) | party (to neighbour)
+# solar: facade orientation for windows that receive solar gain
+envelope:
+  woonkamer:
+    - {kind: wall,   area: 8.6,  U: 0.375, note: "W wall kitchen part, Rc 2.5"}
+    - {kind: wall,   area: 17.9, U: 0.704, note: "W wall living part, Rc 1.25"}
+    - {kind: wall,   area: 1.6,  U: 0.375, note: "N wall beyond extension"}
+    - {kind: wall,   area: 7.4,  U: 0.704, note: "S front + bay cheeks"}
+    - {kind: window, area: 2.4,  U: 2.9, solar: N, note: "rear sliding door"}
+    - {kind: window, area: 2.4,  U: 2.9, solar: S}
+    - {kind: window, area: 1.2,  U: 2.9, solar: SW}
+    - {kind: window, area: 0.7,  U: 2.9, solar: W}
+    - {kind: floor,  area: 40.0, U: 0.23, ufh: true, note: "40 cm foam concrete"}
+    - {kind: party,  area: 8.5,  U: 1.5,  note: "kitchen E wall"}
+  hal:
+    - {kind: door,   area: 2.0,  U: 3.4, note: "front door"}
+    - {kind: window, area: 0.6,  U: 5.1, solar: S, note: "single glazing"}
+    - {kind: wall,   area: 0.3,  U: 0.704}
+    - {kind: floor,  area: 6.2,  U: 1.92, note: "uninsulated hall floor"}
+    - {kind: party,  area: 23.0, U: 1.5}
+  bijkeuken:
+    - {kind: wall,   area: 7.1,  U: 0.193, note: "W wall 11 cm PIR"}
+    - {kind: window, area: 0.8,  U: 2.9, solar: W}
+    - {kind: door,   area: 1.4,  U: 2.0}
+    - {kind: wall,   area: 9.3,  U: 0.375, note: "E wall, assumed exterior"}
+    - {kind: roof,   area: 10.5, U: 0.225, note: "16 cm rockwool"}
+    - {kind: floor,  area: 9.9,  U: 0.23, ufh: true}
+  berging:
+    - {kind: wall,   area: 32.1, U: 0.535, note: "W+E+N walls, 5 cm XPS"}
+    - {kind: door,   area: 2.3,  U: 2.0}
+    - {kind: roof,   area: 15.0, U: 0.225}
+    - {kind: floor,  area: 14.0, U: 0.23, ufh: true}
+  slaapkamer:
+    - {kind: wall,   area: 16.1, U: 0.704, note: "S front + W side"}
+    - {kind: window, area: 2.4,  U: 2.9, solar: S}
+    - {kind: window, area: 1.2,  U: 2.9, solar: SW}
+    - {kind: party,  area: 6.7,  U: 1.5}
+  hobbykamer:
+    - {kind: wall,   area: 5.7,  U: 0.375}
+    - {kind: window, area: 1.2,  U: 2.9, solar: N}
+    - {kind: roof,   area: 9.5,  U: 0.379}
+    - {kind: party,  area: 8.2,  U: 1.5}
+  inloopkast:
+    - {kind: wall,   area: 15.2, U: 0.375}
+    - {kind: window, area: 1.2,  U: 2.9, solar: N}
+    - {kind: roof,   area: 7.2,  U: 0.379}
+  badkamer:
+    - {kind: wall,   area: 4.9,  U: 0.704}
+    - {kind: window, area: 0.4,  U: 1.8, solar: W}
+  zolder:
+    - {kind: roof,   area: 29.9, U: 0.592, note: "pitched, Rc 1.55"}
+    - {kind: roof,   area: 2.4,  U: 2.04,  note: "dormer parts, Rc 0.35"}
+    - {kind: wall,   area: 5.0,  U: 2.78,  note: "label 'unknown' Rc 0.19"}
+    - {kind: party,  area: 6.0,  U: 1.5}
+
+
+internal:
+  - [woonkamer, hal, 40, air]
+  - [woonkamer, bijkeuken, 20]
+  - [bijkeuken, berging, 18]
+  - [woonkamer, slaapkamer, 24]
+  - [woonkamer, hobbykamer, 15]
+  - [woonkamer, inloopkast, 17]
+  - [woonkamer, badkamer, 8.5]
+  - [hal, slaapkamer, 16, air]
+  - [hal, hobbykamer, 16, air]
+  - [hal, inloopkast, 6, air]
+  - [hal, badkamer, 13, air]
+  - [hal, zolder, 20, air]
+  - [slaapkamer, badkamer, 12]
+  - [inloopkast, badkamer, 12]
+  - [inloopkast, hobbykamer, 16]
+  - [zolder, slaapkamer, 21]
+  - [zolder, badkamer, 7]
+
+emitters:
+  radiator_model: ntu          # flow-limited radiators fed at T_flow, valve dead band v0
+  valve_sensor_tau_h: 0.5      # the radiator thermostats measure at the valve
+  radiators:                   # q50 = catalogue output at dT50 (75/65/20), estimated from size/type
+    slaapkamer: {q50: 1550, n: 1.3,  valve: V_slaapkamer, sensor_on_valve: true}
+    hobbykamer: {q50: 1380, n: 1.3,  valve: V_hobbykamer, sensor_on_valve: true}
+    inloopkast: {q50: 1720, n: 1.3,  valve: V_inloopkast, sensor_on_valve: true}
+    zolder:     {q50: 1930, n: 1.3,  valve: V_zolder,     sensor_on_valve: true}
+    badkamer:   {q50: 800,  n: 1.25, valve: V_badkamer,   sensor_on_valve: true}   # towel radiator
+  # K_ws: water->slab W/m2K, h_sa: slab->air W/m2K, c: slab heat capacity J/m2K.
+  # pump: data column with the circulation pump's on-fraction, or 'always'.
+  floor_heating:
+    woonkamer: {area: 40.0, K_ws: 15, h_sa: 10.8, c: 130000, pump: UFH_A}
+    bijkeuken: {area: 9.9,  K_ws: 15, h_sa: 10.8, c: 130000, pump: UFH_B}
+    berging:   {area: 14.0, K_ws: 15, h_sa: 10.8, c: 130000, pump: UFH_B}
+    badkamer:  {area: 4.0,  K_ws: 15, h_sa: 10.8, c: 60000,  pump: always}
+
+# Air-water heat pump (7 kW R290 monoblock). Its indoor parts and bare pipes stand in the shed.
+heat_pump: {zone: berging, standby_W: 7}
+
+# 200 L water/water hot-water heat pump in the shed; takes its source heat from the heating return.
+dhw: {zone: berging, volume_l: 200, power: DHW_W, on_threshold_W: 5, T_cold: 10, T_max: 60}
+
+# Heat from people/appliances is not modelled; one constant background gain keeps its average from
+# being credited to the insulation. ('meter' mode adds a share of household electricity: no better
+# on held-out data for this house.)
+background_gain: {mode: constant}
+
+solar: {proxy: PV_W}     # 2 x 315 Wp panels, ~S; g_sol prior 6 W per W PV fits this window area
+
+controls:
+  thermostats:           # smart thermostats as PI controllers; one tuning per group
+    woonkamer:  {valve: V_woonkamer,  setpoint: SP_woonkamer,  group: woonkamer}
+    slaapkamer: {valve: V_slaapkamer, setpoint: SP_slaapkamer, group: radiators}
+    hobbykamer: {valve: V_hobbykamer, setpoint: SP_hobbykamer, group: radiators}
+    inloopkast: {valve: V_inloopkast, setpoint: SP_inloopkast, group: radiators}
+    zolder:     {valve: V_zolder,     setpoint: SP_zolder,     group: radiators}
+    badkamer:   {valve: V_badkamer,   setpoint: SP_badkamer,   group: radiators}
+  hysteresis:            # generic thermostat on the shed sensor switches the utility/shed floor pump
+    UFH_B: {zone: berging, setpoint: SP_berging, below: 0.3, above: 0.3}
+  pumps:                 # living-room floor pump: observed, always on, or on while the living thermostat heats
+    UFH_A: {mode: observed, follow: V_woonkamer}

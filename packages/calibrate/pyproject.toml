@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "home-thermal-calibrate"
+version = "0.1.0"
+description = "Calibration, cross-validation and forecasting for home-thermal-core models"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = ["home-thermal-core>=0.1,<0.2"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/home_thermal"]

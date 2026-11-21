@@ -1,0 +1,43 @@
+# A small made-up house for trying the library: a floor-heated living room, a bedroom with a
+# radiator, and an unheated hall between them. Used by `home-thermal demo` and the tests.
+name: demo terraced house
+
+zones:
+  living:  {area: 30, volume: 75, ach: 0.6, sensor: T_living}
+  bedroom: {area: 14, volume: 34, ach: 0.6, sensor: T_bedroom}
+  hall:    {area: 8,  volume: 30, ach: 1.0, occupied: false}       # no sensor: estimated only
+
+envelope:
+  living:
+    - {kind: wall,   area: 20, U: 0.5}
+    - {kind: window, area: 5,  U: 1.6, solar: S}
+    - {kind: floor,  area: 30, U: 0.3, ufh: true}
+    - {kind: party,  area: 15, U: 1.2}
+  bedroom:
+    - {kind: wall,   area: 12, U: 0.5}
+    - {kind: window, area: 2,  U: 1.6, solar: N}
+    - {kind: roof,   area: 14, U: 0.4}
+  hall:
+    - {kind: door,   area: 2,  U: 2.5}
+    - {kind: party,  area: 12, U: 1.2}
+
+internal:
+  - [living, hall, 30, air]       # open door
+  - [hall, bedroom, 12, air]      # stairs + door
+  - [living, bedroom, 20]         # timber floor
+
+emitters:
+  radiator_model: ntu
+  radiators:
+    bedroom: {q50: 1200, n: 1.3, valve: V_bedroom}
+  floor_heating:
+    living: {area: 30, K_ws: 15, h_sa: 10.8, c: 130000, pump: P_living}
+
+heat_pump: {}
+
+controls:
+  thermostats:
+    living:  {valve: V_living, setpoint: SP_living}
+    bedroom: {valve: V_bedroom, setpoint: SP_bedroom}
+  pumps:
+    P_living: {mode: follow, follow: V_living}

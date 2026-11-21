@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "home-thermal"
+version = "0.1.0"
+description = "Command line for the home-thermal packages"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = ["home-thermal-core>=0.1,<0.2", "home-thermal-calibrate>=0.1,<0.2", "home-thermal-hass>=0.1,<0.2"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/home_thermal"]
+
+[project.scripts]
+home-thermal = "home_thermal.cli.main:main"

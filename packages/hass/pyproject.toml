@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "home-thermal-hass"
+version = "0.1.0"
+description = "Home Assistant recorder data source for home-thermal"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = ["pandas>=2.0", "numpy>=1.24", "pyyaml>=6.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/home_thermal"]

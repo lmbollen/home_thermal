@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
+from .boiler import Boiler
 from .config import normalise
 from .heatpump import HeatPump
 from .network import Network
@@ -34,8 +35,8 @@ def demo_house() -> dict:
 class _Thermostats:
     """Proportional valves toward a comfort/setback schedule, pumps and circulation on demand."""
 
-    def __init__(self, net: Network, comfort: np.ndarray, rng):
-        self.net, self.comfort, self.rng = net, comfort, rng
+    def __init__(self, net: Network, comfort: np.ndarray, rng, no_heating: np.ndarray):
+        self.net, self.comfort, self.rng, self.no_heating = net, comfort, rng, no_heating
         cfg = net.cfg
         self.rad = {z: r["valve"] for z, r in cfg["emitters"]["radiators"].items() if isinstance(r["valve"], str)}
         for z, t in cfg["controls"]["thermostats"].items():     # thermostats driving other columns
@@ -65,7 +66,7 @@ class _Thermostats:
             row[pump] = out[pump] = on
             demand.append(on > 0)
         demand += [x[net.iA[z]] < sp + 0.3 for z in self.ufh_always]
-        row["circ"] = out["circ"] = float(any(demand) or not demand)
+        row["circ"] = out["circ"] = float((any(demand) or not demand) and not self.no_heating[k])
         self.log.append(out)
 
 
@@ -77,7 +78,9 @@ def synthetic_data(cfg: dict, true_params: dict | None = None, days: float = 10,
     format, sensors included (plus noise_K measurement noise).
 
     solar: include a sunshine proxy column (cfg solar.proxy, W) and sun.
-    heat_pump: include HP_heat_W and HP_elec_W (COP model with eta 0.5)."""
+    heat_pump: include the heat-source measurements: for a house with a `boiler`, its gas column
+        (with eta_boiler from true_params, plus tap-water gas in morning showers, flagged in the
+        dhw_flag column if one is configured); otherwise HP_heat_W and HP_elec_W (eta 0.5)."""
     rng = np.random.default_rng(seed)
     n = int(pd.Timedelta(f"{days}D") / pd.Timedelta(step))
     if n < 2:
@@ -112,14 +115,25 @@ def synthetic_data(cfg: dict, true_params: dict | None = None, days: float = 10,
         if zc["sensor"]:
             df[zc["sensor"]] = 19.0          # start of the run: everything at 19 C
     net = Network(cfg, dict(true_params or {}))
-    thermostats = _Thermostats(net, comfort, rng)
+    # combi boiler: a 15-min morning shower, during which it does not heat the house
+    shower = ((hod >= 7) & (hod < 7.25)).astype(float)
+    tap = shower if (heat_pump and cfg["boiler"] is not None) else np.zeros(n)
+    thermostats = _Thermostats(net, comfort, rng, tap > 0)
     X, Q = simulate(net, df, controller=thermostats)
     log = pd.DataFrame(thermostats.log, index=idx)
     df[log.columns] = log
     S = sensor_temps(net, X, df)
     for c in S.columns:
         df[c] = S[c] + rng.normal(0, noise_K, n)
-    if heat_pump:
+    if heat_pump and cfg["boiler"] is not None:
+        b = cfg["boiler"]
+        fuel = Boiler.from_config(cfg, net.p).fuel(Q) + tap * 20000.0      # combi boiler on tap water
+        step_h = pd.Timedelta(step).total_seconds() / 3600
+        per_step = {"W": 1.0, "kWh": step_h / 1000, "m3": step_h / 1000 / b["kwh_per_m3"]}[b["gas_unit"]]
+        df[b["gas_column"]] = fuel * per_step
+        if b["dhw_flag"]:
+            df[b["dhw_flag"]] = tap
+    elif heat_pump:
         df["HP_heat_W"] = Q
         df["HP_elec_W"] = HeatPump(eta=0.5).electric(Q, df["T_out"], df["T_flow"])
     return df

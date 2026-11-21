@@ -1,0 +1,55 @@
+# A made-up 1970s apartment on a middle floor: three zones, a condensing combi boiler (heating and
+# tap water), panel radiators. Smart radiator thermostats in the living room and bedroom report
+# valve %; the kitchen radiator has an ordinary thermostatic valve (no data). No PV, so no solar
+# proxy: sunny days show up as extra background gain.
+name: apartment with gas boiler
+
+zones:
+  living:  {area: 28, volume: 70, ach: 0.6, sensor: T_living}
+  bedroom: {area: 14, volume: 35, ach: 0.6, sensor: T_bedroom}
+  kitchen: {area: 16, volume: 40, ach: 0.8, note: "kitchen + hall, no sensor"}
+
+envelope:
+  living:
+    - {kind: wall,   area: 12, U: 0.6, note: "facade, cavity filled later"}
+    - {kind: window, area: 6,  U: 2.9, solar: SW, note: "double glazing (no proxy column: no gain)"}
+    - {kind: party,  area: 28, U: 2.5, note: "floor to the flat below (concrete, uninsulated)"}
+    - {kind: party,  area: 28, U: 2.0, note: "ceiling to the flat above"}
+    - {kind: party,  area: 20, U: 1.8, note: "wall to the neighbouring flat"}
+  bedroom:
+    - {kind: wall,   area: 9,  U: 0.6}
+    - {kind: window, area: 2.5, U: 2.9, solar: NE}
+    - {kind: party,  area: 14, U: 2.5}
+    - {kind: party,  area: 14, U: 2.0}
+  kitchen:
+    - {kind: wall,   area: 6,  U: 0.6}
+    - {kind: window, area: 1.5, U: 2.9, solar: NE}
+    - {kind: door,   area: 2,  U: 2.5, note: "front door to the (unheated) stairwell, treated as outside"}
+    - {kind: party,  area: 16, U: 2.5}
+    - {kind: party,  area: 16, U: 2.0}
+
+internal:
+  - [living, kitchen, 100, air]     # open kitchen
+  - [kitchen, bedroom, 10, air]     # bedroom door mostly closed
+  - [living, bedroom, 18]           # brick inner wall, ~9 m2
+
+boundaries:
+  T_neighbour: 19.0                 # heated flats above, below and beside
+
+emitters:
+  radiator_model: ntu
+  radiators:
+    living:  {q50: 1800, valve: V_living, sensor_on_valve: true}     # type 22, 1.1 m
+    bedroom: {q50: 900,  valve: V_bedroom, sensor_on_valve: true}    # type 21, 0.7 m
+    kitchen: {q50: 1000, valve: 100}                                  # ordinary TRV: no data
+
+boiler:
+  gas_column: gas_m3                # m3 per step, from the gas meter
+  gas_unit: m3
+  kwh_per_m3: 9.77                  # Dutch natural gas, upper calorific value
+  dhw_flag: dhw_active              # 1 while the combi boiler heats tap water (OpenTherm)
+
+controls:
+  thermostats:
+    living:  {valve: V_living, setpoint: SP_living}
+    bedroom: {valve: V_bedroom, setpoint: SP_bedroom}

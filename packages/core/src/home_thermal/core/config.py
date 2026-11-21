@@ -28,7 +28,7 @@ DEFAULT_THERMAL_MASS = {  # ISO 13790 'medium' class per m2 floor area
 }
 
 # allowed keys per section (besides 'note')
-TOP_KEYS = {"name", "zones", "envelope", "internal", "emitters", "heat_pump", "dhw", "solar",
+TOP_KEYS = {"name", "zones", "envelope", "internal", "emitters", "heat_pump", "boiler", "dhw", "solar",
             "background_gain", "boundaries", "thermal_mass", "parameters", "controls"}
 ZONE_KEYS = {"area", "volume", "ach", "sensor", "occupied", "in_house_loss"}
 ELEMENT_KEYS = {"kind", "area", "U", "solar", "ufh"}
@@ -36,6 +36,9 @@ EMITTER_KEYS = {"radiator_model", "valve_sensor_tau_h", "radiators", "floor_heat
 RADIATOR_KEYS = {"q50", "n", "valve", "sensor_on_valve", "flow_lph"}
 FLOOR_KEYS = {"area", "K_ws", "h_sa", "c", "pump"}
 HEAT_PUMP_KEYS = {"zone", "dT_cond", "dT_evap", "standby_W", "running_min_W"}
+HP_DEFAULTS = {"dT_cond": 3.0, "dT_evap": 6.0, "standby_W": 7.0, "running_min_W": 50.0}
+BOILER_KEYS = {"zone", "gas_column", "gas_unit", "kwh_per_m3", "dhw_flag"}
+GAS_UNITS = ("m3", "kWh", "W")
 DHW_KEYS = {"zone", "volume_l", "power", "on_threshold_W", "T_cold", "T_max"}
 SOLAR_KEYS = {"proxy", "weights"}
 BACKGROUND_KEYS = {"mode", "meter_column", "meter_heat_share"}
@@ -66,6 +69,7 @@ def normalise(cfg: dict) -> dict:
     if not isinstance(c.get("zones"), dict) or not c["zones"]:
         raise ConfigError("zones: at least one zone is required (a mapping of zone name -> settings)")
     c["name"] = c.get("name") or "house"
+    c["boiler"] = c.get("boiler", None)
     for key in ("envelope", "emitters", "heat_pump", "solar", "background_gain", "boundaries",
                 "thermal_mass", "parameters", "controls"):
         c[key] = _section(c, key)
@@ -202,7 +206,11 @@ def _check_heat_sources(c):
     if hp.get("zone") is not None:
         _zone(hp["zone"], zones, "heat_pump.zone")
     hp.setdefault("zone", None)
-    for k, v in (("dT_cond", 3.0), ("dT_evap", 6.0), ("standby_W", 7.0), ("running_min_W", 50.0)):
+    if c["boiler"] is not None:
+        if hp.get("zone") is not None or any(hp.get(k, v) != v for k, v in HP_DEFAULTS.items()):
+            raise ConfigError("heat_pump and boiler: configure one heat source, not both")
+        _check_boiler(c)
+    for k, v in HP_DEFAULTS.items():
         hp.setdefault(k, v)
         _number(hp, k, "heat_pump", minimum=0)
     if c["dhw"]:
@@ -215,6 +223,25 @@ def _check_heat_sources(c):
         for k, v in (("on_threshold_W", 5.0), ("T_cold", 10.0), ("T_max", 60.0)):
             d.setdefault(k, v)
             _number(d, k, "dhw")
+
+
+def _check_boiler(c):
+    b = c["boiler"] = _mapping(c["boiler"] or {}, "boiler")
+    _keys(b, BOILER_KEYS, "boiler")
+    if b.get("zone") is not None:
+        _zone(b["zone"], c["zones"], "boiler.zone")
+    b.setdefault("zone", None)
+    b.setdefault("gas_column", "gas_m3")
+    b.setdefault("gas_unit", "m3")
+    b.setdefault("kwh_per_m3", 9.77)
+    b.setdefault("dhw_flag", None)
+    if not isinstance(b["gas_column"], str):
+        raise ConfigError("boiler.gas_column: a data column name")
+    if b["gas_unit"] not in GAS_UNITS:
+        raise ConfigError(f"boiler.gas_unit: must be one of {GAS_UNITS} (amount per step, or W)")
+    _number(b, "kwh_per_m3", "boiler", positive=True)
+    if b["dhw_flag"] is not None and not isinstance(b["dhw_flag"], str):
+        raise ConfigError("boiler.dhw_flag: a data column name (1 while the boiler heats tap water)")
 
 
 def _check_misc(c):

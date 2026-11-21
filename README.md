@@ -20,7 +20,7 @@ you need.
 
 | Package (pip name) | Import | What it does | Depends on |
 |---|---|---|---|
-| `home-thermal-core` | `home_thermal.core` | House config, RC network, simulation, energy balance | numpy, scipy, pandas, pyyaml |
+| `home-thermal-core` | `home_thermal.core` | House config, RC network, heat pump / gas boiler, simulation, energy balance | numpy, scipy, pandas, pyyaml |
 | `home-thermal-calibrate` | `home_thermal.calibrate` | Fit to data, cross-validation, Kalman filter, forecasts | core |
 | `home-thermal-control` | `home_thermal.control` | Thermostats (PI, hysteresis) and pump logic for closed-loop what-ifs | core |
 | `home-thermal-hass` | `home_thermal.hass` | Data from a Home Assistant recorder database | pandas, pyyaml |
@@ -82,7 +82,8 @@ print(cv.report(cfg))
 1. **Describe the house** in a YAML file: zones (rooms or groups of rooms), envelope elements per
    zone, links between zones, emitters (radiators, floor heating). Start from
    [the demo house](packages/core/src/home_thermal/core/examples/demo_house.yaml) or the
-   [fully worked example](examples/semi_detached_1935/house.yaml). Every key is described in
+   fully worked examples: a [semi-detached house with a heat pump](examples/semi_detached_1935/house.yaml)
+   and an [apartment with a gas combi boiler](examples/apartment_gas_boiler/house.yaml). Every key is described in
    [docs/configuration.md](docs/configuration.md). Run `home-thermal check house.yaml` after every
    edit: it explains what is wrong and lists the data columns the model needs.
 2. **Get the data** into one table on a regular time grid (15 minutes works well), with the column

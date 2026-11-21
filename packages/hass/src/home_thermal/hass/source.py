@@ -40,6 +40,7 @@ class HassConfig:
     nominal_flow: float = 900.0          # statistics only: typical flow while running (L/h)
     water_sensor_offset_K: float = 0.0   # flow reads this much above return at standstill
     pv_energy: str | None = None         # energy counter column (kWh) to derive PV_W from
+    gas_counter: str | None = None       # gas meter counter column (m3, total) to derive gas_m3 per step from
     pump_running_W: dict = field(default_factory=dict)   # statistics: pump col -> {power: col, running_W: W}
     household_power: dict | None = None  # {column, plus: [...], minus: [...]}
     statistics_start: str | None = None
@@ -153,6 +154,9 @@ def load_states(db, cfg: HassConfig, step: str = "15min") -> pd.DataFrame:
             df["T_water"] = ((df["T_flow"] + tr) / 2).where(circ)
         df["circ"] = circ.astype(float)
     out = df.resample(step).mean()
+    if cfg.gas_counter and cfg.gas_counter in df:
+        g_end = df[cfg.gas_counter].resample(step).last()
+        out["gas_m3"] = (g_end - g_end.shift(1)).clip(lower=0)
     if cfg.pv_energy and cfg.pv_energy in df:
         hours = pd.Timedelta(step).total_seconds() / 3600
         e_end = df[cfg.pv_energy].resample(step).last()
@@ -234,6 +238,9 @@ def load_statistics(db, cfg: HassConfig, start=None, end=None, step: str = "15mi
     h = h.reindex(pd.date_range(h.index[0], h.index[-1], freq="1h"))
     idx = pd.date_range(h.index[0], h.index[-1] + pd.Timedelta("1h") - pd.Timedelta(step), freq=step)
     per_hour = int(pd.Timedelta("1h") / pd.Timedelta(step))
+    if cfg.gas_counter and cfg.gas_counter in hsum:
+        # an amount, not a rate: the hour's m3 is shared over its steps
+        h["gas_m3"] = (hsum[cfg.gas_counter] - hsum[cfg.gas_counter].shift(1)).clip(lower=0) / max(per_hour, 1)
     return h.reindex(idx, method="ffill", limit=max(per_hour - 1, 0)) if per_hour > 1 else h.reindex(idx)
 
 

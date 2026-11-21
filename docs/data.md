@@ -22,10 +22,13 @@ Fixed names:
 | `HP_heat_W` | W | optional calibration term | heat-meter output of the heat source |
 | `HP_elec_W` | W | optional calibration term (with `T_flow`) | electricity used by the heat source |
 | `HP_heat_per_K` | W/K | optional | HP_heat_W / raw (flow − return) ΔT, for the meter offset correction `dT_off` |
+| `gas_m3` (`boiler.gas_column`) | m³ / kWh per step, or W | optional calibration term (boiler) | gas used by the boiler |
+| `boiler.dhw_flag` | 0-1 | optional | 1 while a combi boiler heats tap water |
 
-The two heat-pump terms are independent: with only `HP_heat_W` the fit uses the heat meter, with
-only `HP_elec_W` + `T_flow` it uses electricity. Without either, it uses room temperatures alone
-and does not fit the heat-pump parameters.
+The heat-source terms are independent: heat meter (`HP_heat_W`), heat-pump electricity
+(`HP_elec_W` + `T_flow`) and, for a house with a `boiler`, gas. Each is used when its columns are
+present; parameters that only a missing term could constrain (e.g. `eta_hp` without electricity
+data) stay at their prior. Without any, the fit uses room temperatures alone.
 
 Names you choose in the house config:
 
@@ -91,6 +94,8 @@ All keys: `HassConfig` in [source.py](../packages/hass/src/home_thermal/hass/sou
   computes heat from the raw sensors, also set the same value as the prior of `dT_off` in the
   house config (`parameters: {dT_off: {prior: 0.85}}`).
 - `pv_energy`: derive `PV_W` from an energy counter (kWh) instead of a power sensor.
+- `gas_counter`: the column of a gas meter's total (m³, e.g. from the P1/DSMR integration);
+  `gas_m3` per step is derived from it (also from the hourly statistics).
 
 ```bash
 home-thermal hass-fetch homeassistant.yaml --dest data/ha_db       # copy the DB over ssh

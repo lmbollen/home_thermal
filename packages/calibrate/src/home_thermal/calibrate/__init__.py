@@ -7,9 +7,9 @@
 """
 from .crossval import CrossValidation, cross_validate, make_blocks
 from .estimate import FilterNoise, forecast_errors, kalman
-from .fit import FitResult, FitSettings, fit, meter_heat_true, residuals, score
+from .fit import FitResult, FitSettings, data_terms, fit, meter_heat_true, residuals, score
 from .io import load_params, save_params
 
-__all__ = ["CrossValidation", "FilterNoise", "FitResult", "FitSettings", "cross_validate", "fit",
+__all__ = ["CrossValidation", "FilterNoise", "FitResult", "FitSettings", "cross_validate", "data_terms", "fit",
            "forecast_errors", "kalman", "load_params", "make_blocks", "meter_heat_true", "residuals",
            "save_params", "score"]

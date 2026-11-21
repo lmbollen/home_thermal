@@ -17,7 +17,7 @@ zones: { ... }          # required
 envelope: { ... }
 internal: [ ... ]
 emitters: { ... }
-heat_pump: { ... }
+heat_pump: { ... }      # or boiler: { ... }
 dhw: { ... }
 solar: { ... }
 background_gain: { ... }
@@ -157,10 +157,34 @@ Used only when the data has heat-pump measurements (`HP_heat_W` and/or `HP_elec_
 off and uses `standby_W`. `zone` (optional): where the indoor unit and pipework lose heat
 (parameter `UA_hp`).
 
-**Gas boiler or other heat source:** leave this section out and leave `HP_*` columns out of the
-data. The model then calibrates on room temperatures only; the heat-pump parameters are not
-fitted. You still need `T_flow` (or `T_water`) and `circ` (1 while the boiler's pump runs, e.g.
-from OpenTherm or a pump plug). A gas-meter data term is not available yet.
+## boiler
+
+A gas boiler instead of a heat pump (configure one of the two):
+
+```yaml
+boiler:
+  gas_column: gas_m3        # default; gas used per step
+  gas_unit: m3              # m3 or kWh per step, or W (power)
+  kwh_per_m3: 9.77          # upper calorific value; Dutch natural gas 9.77, UK/EU typically 10.5-11.2
+  dhw_flag: dhw_active      # optional: column that is 1 while a combi boiler heats tap water
+  zone: utility             # optional: where the boiler and its pipes lose heat (parameter UA_boiler)
+parameters:
+  eta_boiler: {prior: 0.9}  # efficiency on the upper calorific value
+```
+
+Calibration then compares hourly gas use with the modelled heat ÷ `eta_boiler`. The gas meter is
+a strong anchor: it pins the house's heat demand, and with it `H_house`. Hours in which a combi
+boiler heated tap water are left out: hours with `dhw_flag` set, and hours in which gas burned
+while no heating water circulated (`circ` = 0).
+
+`eta_boiler` is **fixed** by default. Room temperatures and gas together only determine
+heat ÷ efficiency, so set its prior from the boiler type instead: modern condensing boiler running
+at low flow temperatures 0.90-0.95, condensing boiler with high flow temperatures (> 55 °C return)
+0.85, old non-condensing 0.75-0.80 (all on the upper calorific value, as gas bills use).
+
+You need `T_flow` (or `T_water`) and `circ` (1 while the boiler's heating pump runs, e.g. from
+OpenTherm or a smart plug on the pump). See the
+[apartment example](../examples/apartment_gas_boiler/house.yaml).
 
 ## dhw (optional)
 

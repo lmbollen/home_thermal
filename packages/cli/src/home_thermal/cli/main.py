@@ -14,7 +14,7 @@ from pathlib import Path
 import pandas as pd
 
 from home_thermal.core import (
-    HEAT_PUMP_PARAMS,
+    DATA_TERM_PARAMS,
     Network,
     check_names,
     coupling,
@@ -64,12 +64,18 @@ def cmd_check(args):
     req = ["T_water (or T_flow + T_return)" if c == "T_water" else c for c in required_columns(cfg)]
     print("required data columns:", ", ".join(req))
     optional = [cfg["solar"]["proxy"]] if "g_sol" in ps else []
-    optional += ["HP_heat_W", "HP_elec_W (+T_flow)", "HP_heat_per_K"]
+    if cfg["boiler"] is not None:
+        b = cfg["boiler"]
+        optional += [f"{b['gas_column']} (gas, {b['gas_unit']})"] + ([b["dhw_flag"]] if b["dhw_flag"] else [])
+    else:
+        optional += ["HP_elec_W (+T_flow)"]
+    optional += ["HP_heat_W", "HP_heat_per_K"]
     print("optional data columns:", ", ".join(optional))
-    print(f"parameters: {len(ps)} ({len(free)} fitted by default; * = only with heat-pump data)")
+    print(f"parameters: {len(ps)} ({len(free)} fitted by default; * = only with the matching "
+          "heat-source data: heat meter, electricity or gas)")
     width = max(map(len, ps))
     for n, p in ps.items():
-        mark = ("fit*" if n in HEAT_PUMP_PARAMS else "fit ") if n in free else "fix "
+        mark = ("fit*" if n in DATA_TERM_PARAMS else "fit ") if n in free else "fix "
         print(f"  {mark} {n:{width}s} prior {p.prior:<8g} {p.doc}")
 
 

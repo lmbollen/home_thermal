@@ -42,7 +42,8 @@ house.yaml`, or [params.py](../packages/core/src/home_thermal/core/params.py). A
 only when something in the house uses it.
 
 Fixed by default (held at the prior): `m_win`, `m_air`, `m_Cair`, `m_flow`, `dT_off` (prior 0:
-set it to your measured meter offset), `cop_dhw`, `UA_tank`, `tap_W`. Room temperatures alone rarely separate these from other parameters; fitting
+set it to your measured meter offset), `eta_boiler` (set it from the boiler type), `cop_dhw`,
+`UA_tank`, `tap_W`. Room temperatures alone rarely separate these from other parameters; fitting
 them lets them compensate for errors elsewhere. Free them per house under `parameters:` if you
 have data that pins them down (and check on held-out data that it helps).
 
@@ -58,7 +59,9 @@ API, 48 h in the CLI and in `cross_validate`):
 
 - every zone sensor, σ_T = 0.5 K,
 - heat-meter output if `HP_heat_W` is present, σ = 800 W (meters are often biased; weak),
-- heat-pump electricity if `HP_elec_W` and `T_flow` are present, σ = 100 W (reliable; strong).
+- heat-pump electricity if `HP_elec_W` and `T_flow` are present, σ = 100 W (reliable; strong),
+- boiler gas if the house has a `boiler` and the data its gas column, σ = 150 W (strong): modelled
+  heat ÷ `eta_boiler` against the gas meter, leaving out hours with tap-water heating.
 
 Model errors are autocorrelated over hours, so the data term is down-weighted to about one
 independent sample per 6 hours (`FitSettings.autocorr_h`). Otherwise the priors would be ignored.

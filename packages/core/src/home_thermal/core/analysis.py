@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 from .network import BOUNDARIES, Network
+from .physics import source_zone
 from .simulate import simulate
 
 
@@ -33,7 +34,7 @@ def energy_balance(net: Network, sim: dict, start=None) -> dict:
     X, Tb, Qe = sim["X"][keep], sim["Tb"][keep], sim["Qe"][keep]
     h = sim["dt"] / 3600 / 1000   # W*step -> kWh
     cfg = net.cfg
-    hz = cfg["heat_pump"].get("zone")
+    hz = source_zone(cfg)[0]
     src = []
     for z in net.zones:
         e = Qe[:, net.iA[z]].sum() * h

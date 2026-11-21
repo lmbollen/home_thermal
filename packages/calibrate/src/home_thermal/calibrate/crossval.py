@@ -36,8 +36,8 @@ class CrossValidation:
         rooms = self.folds[self.folds.kind == "zone"]
         return rooms.groupby(["series", "params"]).rmse.mean().unstack()
 
-    def heat_pump(self) -> pd.DataFrame:
-        hp = self.folds[self.folds.kind == "heat pump"]
+    def heat_source(self) -> pd.DataFrame:
+        hp = self.folds[self.folds.kind == "heat source"]
         return hp.groupby(["series", "params"])[["bias", "rmse"]].mean().unstack()
 
     def forecast_rmse(self) -> pd.DataFrame | None:
@@ -63,9 +63,9 @@ class CrossValidation:
                  f"mean over folds: fitted {r['fitted'].mean():.2f} K, prior {r['prior'].mean():.2f} K; "
                  f"fitted better in {(r['fitted'] < r['prior']).sum()}/{len(r)} folds",
                  "", "HELD-OUT RMSE per zone (K), mean over folds:", self.per_room().round(2).to_string()]
-        hp = self.heat_pump()
+        hp = self.heat_source()
         if not hp.empty:
-            lines += ["", "HELD-OUT heat pump (W, hourly), mean over folds:", hp.round(0).to_string()]
+            lines += ["", "HELD-OUT heat source (W, hourly), mean over folds:", hp.round(0).to_string()]
         fr = self.forecast_rmse()
         if fr is not None:
             lines += ["", "HELD-OUT forecasts from the filtered state, RMSE (K):", fr.round(2).to_string()]

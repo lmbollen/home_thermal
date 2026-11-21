@@ -23,6 +23,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from .physics import source_zone
+
 
 def step_seconds(df: pd.DataFrame) -> float:
     return (df.index[1] - df.index[0]).total_seconds()
@@ -32,7 +34,7 @@ def required_columns(cfg: dict) -> list[str]:
     """Columns the simulation needs for this house (calibration additionally needs sensors)."""
     em = cfg["emitters"]
     cols = ["T_out"]
-    if em["radiators"] or em["floor_heating"] or cfg["heat_pump"].get("zone"):
+    if em["radiators"] or em["floor_heating"] or source_zone(cfg)[0]:
         cols += ["T_water", "circ"]
         if em["radiators"] and em["radiator_model"] == "ntu":
             cols.append("T_flow")

@@ -4,7 +4,9 @@ regularised by the priors (maximum a posteriori with Gaussian priors).
 Data terms (hourly means after the warm-up):
 - every zone sensor,
 - heat-meter output if the data has HP_heat_W (weak: meters are often biased),
-- heat-pump electricity if the data has HP_elec_W and T_flow (strong).
+- heat-pump electricity if the data has HP_elec_W and T_flow (strong),
+- boiler gas use if the house has a `boiler` and the data its gas column (strong; hours in which
+  the boiler heated tap water are left out).
 Model errors are strongly autocorrelated, so the data term counts roughly one independent sample
 per `autocorr_h` hours; otherwise the priors would be ignored.
 """
@@ -17,13 +19,16 @@ import pandas as pd
 from scipy.optimize import least_squares
 
 from home_thermal.core import (
-    HEAT_PUMP_PARAMS,
+    DATA_TERM_PARAMS,
+    Boiler,
     HeatPump,
     Network,
     check_names,
     check_sensors,
     default_free,
     defaults,
+    dhw_steps,
+    gas_power,
     parameter_set,
     prepare,
     sensor_temps,
@@ -36,6 +41,7 @@ class FitSettings:
     sigma_T: float = 0.5        # K, hourly room temperature model error (incl. sensor placement)
     sigma_Q: float = 800.0      # W, hourly heat-meter error (weak constraint)
     sigma_P: float = 100.0      # W, hourly heat-pump electricity error (strong anchor)
+    sigma_G: float = 150.0      # W, hourly boiler gas power error (strong anchor)
     autocorr_h: float = 6.0
     warmup: pd.Timedelta = field(default_factory=lambda: pd.Timedelta("24h"))
     max_nfev: int = 300
@@ -65,9 +71,17 @@ def meter_heat_true(df: pd.DataFrame, p: dict) -> pd.Series:
     return p["k_meter"] * (df["HP_heat_W"] - p["dT_off"] * per_k).clip(lower=0)
 
 
-def heat_terms(df: pd.DataFrame) -> tuple[bool, bool]:
-    """Which heat-pump data terms the data supports: (heat meter, electricity)."""
-    return "HP_heat_W" in df, {"HP_elec_W", "T_flow"} <= set(df.columns)
+def data_terms(cfg: dict, df: pd.DataFrame) -> set[str]:
+    """Heat-source data terms this house and data support: 'heat meter', 'electricity', 'gas'."""
+    terms = set()
+    if "HP_heat_W" in df:
+        terms.add("heat meter")
+    if cfg["boiler"] is not None:
+        if cfg["boiler"]["gas_column"] in df:
+            terms.add("gas")
+    elif {"HP_elec_W", "T_flow"} <= set(df.columns):
+        terms.add("electricity")
+    return terms
 
 
 def _keep(df, warmup, mask):
@@ -80,21 +94,26 @@ def _keep(df, warmup, mask):
 
 
 def _errors(cfg, net, X, Q, df, keep, hourly_rooms: bool) -> dict:
-    """Model minus measurement per series: {name: (kind, errors)}; kind 'zone' or 'heat pump'."""
+    """Model minus measurement per series: {name: (kind, errors)}; kind 'zone' or 'heat source'."""
     out = {}
     S = sensor_temps(net, X, df)
     for z, zc in cfg["zones"].items():
         if zc["sensor"]:
             e = (S[zc["sensor"]] - df[zc["sensor"]])[keep]
             out[z] = ("zone", (e.resample("1h").mean() if hourly_rooms else e).dropna())
-    has_heat, has_elec = heat_terms(df)
-    if has_heat:
+    terms = data_terms(cfg, df)
+    full_hours = pd.Series(keep, index=df.index).resample("1h").min().astype(bool)
+    if "heat meter" in terms:
         h = (Q - meter_heat_true(df, net.p))[keep].resample("1h").mean().dropna()
-        out["HP heat (W, hourly)"] = ("heat pump", h)
-    if has_elec:
-        full_hours = pd.Series(keep, index=df.index).resample("1h").min().astype(bool)
+        out["HP heat (W, hourly)"] = ("heat source", h)
+    if "electricity" in terms:
         e = HeatPump.from_config(cfg, net.p).electric_hourly(Q, df) - df["HP_elec_W"].resample("1h").mean()
-        out["HP electricity (W, hourly)"] = ("heat pump", e[full_hours].dropna())
+        out["HP electricity (W, hourly)"] = ("heat source", e[full_hours].dropna())
+    if "gas" in terms:
+        no_dhw = ~dhw_steps(cfg, df).resample("1h").max().astype(bool)
+        pred = pd.Series(Boiler.from_config(cfg, net.p).fuel(Q), index=df.index).resample("1h").mean()
+        e = pred - gas_power(cfg, df).resample("1h").mean()
+        out["gas (W, hourly)"] = ("heat source", e[full_hours & no_dhw].dropna())
     return out
 
 
@@ -103,7 +122,8 @@ def residuals(cfg: dict, p: dict, df: pd.DataFrame, settings: FitSettings, mask=
     net = Network(cfg, p)
     X, Q = simulate(net, df)
     w = 1.0 / np.sqrt(settings.autocorr_h)
-    sigma = {"HP heat (W, hourly)": settings.sigma_Q, "HP electricity (W, hourly)": settings.sigma_P}
+    sigma = {"HP heat (W, hourly)": settings.sigma_Q, "HP electricity (W, hourly)": settings.sigma_P,
+             "gas (W, hourly)": settings.sigma_G}
     errors = _errors(cfg, net, X, Q, df, _keep(df, settings.warmup, mask), True)
     r = [w * e.to_numpy() / sigma.get(name, settings.sigma_T)
          for name, (kind, e) in errors.items() if use_heat or kind == "zone"]
@@ -131,7 +151,8 @@ def fit(cfg: dict, df: pd.DataFrame, free: list | None = None, base: dict | None
         settings: FitSettings | None = None, mask=None, use_heat=True, verbose=0) -> FitResult:
     """Fit the `free` parameters (default: `default_free(cfg)`); others stay at `base`/prior.
     mask: boolean array, True = step used in the fit (e.g. to hold out a test block).
-    Heat-pump parameters are dropped from `free` when the data has no heat-pump columns."""
+    Heat-source parameters whose data term is missing (e.g. eta_boiler without gas data) are
+    dropped from `free`: nothing in the data constrains them."""
     settings = settings or FitSettings()
     df = prepare(df)
     check_sensors(cfg, df)
@@ -140,8 +161,8 @@ def fit(cfg: dict, df: pd.DataFrame, free: list | None = None, base: dict | None
     free = list(free) if free is not None else default_free(cfg)
     check_names(cfg, dict.fromkeys(free))
     check_names(cfg, base or {})
-    if not (use_heat and any(heat_terms(df))):
-        free = [n for n in free if n not in HEAT_PUMP_PARAMS]   # nothing in the data constrains them
+    terms = data_terms(cfg, df) if use_heat else set()
+    free = [n for n in free if DATA_TERM_PARAMS.get(n, "always") in terms | {"always"}]
     base = {**defaults(cfg), **(base or {})}
     if not free:
         return FitResult(base, [], {}, None, 0.0, 0, [])
@@ -178,9 +199,10 @@ def fit(cfg: dict, df: pd.DataFrame, free: list | None = None, base: dict | None
 
 
 def score(cfg: dict, p: dict, df: pd.DataFrame, mask=None, warmup="24h") -> pd.DataFrame:
-    """Bias and RMSE per zone sensor (K, at the data resolution) and, if measured, for heat-pump
-    heat and electricity (W, hourly), over the steps in mask after the warm-up.
-    Columns: kind ('zone' | 'heat pump'), bias, rmse."""
+    """Bias and RMSE per zone sensor (K, at the data resolution) and, if measured, for the heat
+    source: heat meter, heat-pump electricity, boiler gas (W, hourly), over the steps in mask
+    after the warm-up.
+    Columns: kind ('zone' | 'heat source'), bias, rmse."""
     df = prepare(df)
     check_sensors(cfg, df)
     net = Network(cfg, p)

@@ -80,12 +80,19 @@ def emitter_heat(net: Network, x: np.ndarray, row: dict) -> tuple[np.ndarray, fl
         h = p["m_ufh"] * u["K_ws"] * u["area"] * (tw - x[s]) * pump_fraction(net, u["pump"], row) * circ
         q[s] += h
         q_source += h
-    hz = net.cfg["heat_pump"].get("zone")
+    hz, ua = source_zone(net.cfg)
     if hz:
-        h = p["UA_hp"] * (tw - x[net.iA[hz]]) * circ
+        h = p[ua] * (tw - x[net.iA[hz]]) * circ
         q[net.iA[hz]] += h
         q_source += h
     return q, q_source + extracted
+
+
+def source_zone(cfg: dict) -> tuple[str | None, str | None]:
+    """Zone where the heat source (heat pump indoor unit or boiler) loses heat, and its parameter."""
+    if cfg["boiler"] is not None:
+        return cfg["boiler"]["zone"], "UA_boiler"
+    return cfg["heat_pump"].get("zone"), "UA_hp"
 
 
 def dhw_heat(net: Network, x: np.ndarray, row: dict) -> tuple[float, float, float]:

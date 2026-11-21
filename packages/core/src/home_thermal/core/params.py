@@ -69,6 +69,12 @@ GENERIC: dict[str, Param] = {
     "dT_off": _lin(0.0, 0.15, (-1.5, 1.5), "flow/return sensor offset in the heat meter's own dT (K); "
                    "set the prior to your measured standstill offset", fixed=True),
     "UA_hp": _lin(10.0, 10.0, (0.0, 60.0), "heat pump unit + pipework losses into its zone (W/K)"),
+    # gas boiler
+    # fixed: room temperatures + gas only identify heat demand / efficiency, not both; set the prior
+    # from the boiler type and the gas meter then pins the heat demand (and H_house)
+    "eta_boiler": Param(0.9, 0.05, "log", (0.6, 1.0), True,
+                        "boiler efficiency: heat to the water / gas energy (upper calorific value)"),
+    "UA_boiler": _lin(5.0, 5.0, (0.0, 40.0), "boiler casing + pipework losses into its zone (W/K)"),
     # domestic hot water tank
     "cop_dhw": Param(3.5, 0.2, "log", (2.0, 5.0), True, "hot-water heat pump COP"),
     "UA_tank": Param(1.5, 0.4, "log", (0.5, 5.0), True, "hot-water tank loss (W/K)"),
@@ -78,7 +84,10 @@ GENERIC: dict[str, Param] = {
 F_OFF = _lin(0.05, 0.2, (0.0, 1.0), "residual flow fraction with the pump off")
 
 
-# parameters that only matter when the data has heat-pump measurements (HP_heat_W / HP_elec_W)
+# parameters only a heat-source data term constrains: parameter -> the term it needs (see
+# home_thermal.calibrate.fit.data_terms). fit() leaves a parameter at its prior without its term.
+DATA_TERM_PARAMS = {"k_meter": "heat meter", "dT_off": "heat meter", "eta_hp": "electricity",
+                    "P_aux_hp": "electricity", "eta_boiler": "gas"}
 HEAT_PUMP_PARAMS = ("eta_hp", "P_aux_hp", "k_meter", "dT_off")
 
 
@@ -116,9 +125,15 @@ def parameter_set(cfg: dict) -> dict[str, Param]:
         out.update({n: GENERIC[n] for n in model_params[:-1]})
         if on_valve:
             out[model_params[-1]] = GENERIC[model_params[-1]]
-    out.update({n: GENERIC[n] for n in HEAT_PUMP_PARAMS})
-    if cfg["heat_pump"].get("zone"):
-        out["UA_hp"] = GENERIC["UA_hp"]
+    if cfg["boiler"] is not None:
+        out["eta_boiler"] = GENERIC["eta_boiler"]
+        out.update({n: GENERIC[n] for n in ("k_meter", "dT_off")})     # a heat meter is optional
+        if cfg["boiler"]["zone"]:
+            out["UA_boiler"] = GENERIC["UA_boiler"]
+    else:
+        out.update({n: GENERIC[n] for n in HEAT_PUMP_PARAMS})
+        if cfg["heat_pump"].get("zone"):
+            out["UA_hp"] = GENERIC["UA_hp"]
     if cfg["dhw"]:
         out.update({n: GENERIC[n] for n in ("cop_dhw", "UA_tank", "tap_W")})
 

@@ -11,6 +11,9 @@ boundaries:              # priors of the fitted boundary temperatures
   T_ground: 11.0         # crawl space / ground under the floor in November
 
 parameters:
+  k_meter: {prior: 1.0, fixed: true}   # trust the heat figure once the sensor offset is removed: the
+                         # integration's corrected COP (3.4-3.7 at 2 C outside, Nov 2026) is physically
+                         # plausible; a fitted scale (0.70) relied on the water-flow sensor, which reads low
   dT_off: {prior: 0.87}  # offset inside the heat figure's raw dT; only applied to data before the
                          # integration update (afterwards HP_heat_per_K is 0: the heat arrives corrected)
 

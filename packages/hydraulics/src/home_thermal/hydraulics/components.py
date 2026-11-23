@@ -307,3 +307,31 @@ class ThermostaticMixingValve:
 
     def target(self, t_mixed: float) -> float:
         return min(max(0.5 + (self.t_set - t_mixed) / self.band, 0.0), 1.0)
+
+
+@dataclass
+class ThrottlingLimiter:
+    """Thermostatic throttling valve (temperature limiter, e.g. a return-temperature limiter on a
+    floor loop): closes as the water at `sense_node` gets warmer than `t_set`, with a proportional
+    band `band` K: u = clip(0.5 + (t_set - T) / band, u_min, 1). `u_min` is the opening it never
+    goes below (leakage, or a valve that never shuts fully). Put `valve` in the branch it throttles;
+    `Circuit.solve` updates u together with the temperatures."""
+
+    t_set: float
+    kv_max: float
+    band: float = 4.0
+    sense_node: str = ""
+    u_min: float = 0.0
+    u: float = 0.5
+    name: str = "limiter"
+    valve: Valve = field(init=False)
+
+    def __post_init__(self):
+        self.valve = Valve(self.kv_max, opening=lambda ctx: self.u, name=self.name)
+
+    @property
+    def mixed_node(self) -> str:      # the node whose temperature drives it (shared solver interface)
+        return self.sense_node
+
+    def target(self, t: float) -> float:
+        return min(max(0.5 + (self.t_set - t) / self.band, self.u_min), 1.0)

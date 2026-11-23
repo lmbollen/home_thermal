@@ -122,3 +122,31 @@ def test_pipe_friction_reasonable():
     assert 2.5 < Pipe(10, 0.020).dp(0.8, {}) < 4.5
     assert Pipe(10, 0.020).dp(-0.8, {}) == pytest.approx(-Pipe(10, 0.020).dp(0.8, {}))
     assert kv_dp(1.0, 1.0) == 100.0
+
+
+def _limited_loop(t_supply, sense, u_min=0.05):
+    from home_thermal.hydraulics import ThrottlingLimiter
+    lim = ThrottlingLimiter(t_set=25.0, kv_max=1.0, band=4.0, u_min=u_min, name="lim")
+    c = Circuit("ret")
+    c.add("hp", "ret", "flow", [Pump(CURVE), HeatSource(t_out=t_supply)])
+    c.add_limiter("lim", "flow", "loop_in", lim, sense_node=sense)
+    c.add("floor", "loop_in", "loop_ret", [Kv(1.0), Emitter("slab", UA=150)])
+    c.add("back", "loop_ret", "ret", [Kv(5.0)])
+    c.add("other", "flow", "ret", [Kv(1.0)])        # the rest of the house keeps the pump flowing
+    return lim, c.solve({"slab": 21.0})
+
+
+def test_limiter_closes_on_hot_supply():
+    lim, res = _limited_loop(40.0, "loop_in")
+    assert lim.u == pytest.approx(0.05)                 # supply 40 C >> 25 C: at its minimum opening
+    lim2, res2 = _limited_loop(22.0, "loop_in")
+    assert lim2.u == pytest.approx(1.0)                 # cool supply: fully open
+    assert res2.flow["floor"] > 5 * res.flow["floor"]
+
+
+def test_return_limiter_settles_in_its_band():
+    lim, res = _limited_loop(40.0, "loop_ret", u_min=0.0)
+    t_ret = res.temperature["loop_ret"]
+    assert 0 < lim.u < 1
+    assert t_ret == pytest.approx(25.0 + 4.0 * (0.5 - lim.u), abs=0.01)   # P-band equilibrium on the return
+    assert 21.0 < t_ret < 27.0

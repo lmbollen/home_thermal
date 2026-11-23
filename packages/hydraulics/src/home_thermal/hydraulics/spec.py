@@ -37,6 +37,7 @@ from .components import (
     Pump,
     PumpCurve,
     ThermostaticMixingValve,
+    ThrottlingLimiter,
     Valve,
 )
 
@@ -183,6 +184,13 @@ def build_circuit(spec: dict, values: dict | None = None) -> Circuit:
             c.add(
                 f"{n}.primary_return", f"{n}.loop_ret", g["to"], [Kv(num(g.get("return_kv", 5.0), w), name=f"{n}.ret")]
             )
+            continue
+        if "limiter" in b:
+            lm, w = b["limiter"], f"{where}.limiter"
+            lim = ThrottlingLimiter(num(lm["t_set"], w), num(lm["kv_max"], w), num(lm.get("band", 4.0), w),
+                                    u_min=num(lm.get("u_min", 0.0), w), name=b["name"])
+            extra = [element(e, f"{where}.elements[{k}]") for k, e in enumerate(b.get("elements", []))]
+            c.add_limiter(b["name"], b["from"], b["to"], lim, extra, sense_node=lm.get("sense"))
             continue
         if "overflow" in b:
             o = b["overflow"]

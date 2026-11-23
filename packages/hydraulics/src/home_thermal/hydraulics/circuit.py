@@ -76,6 +76,14 @@ class Circuit:
         br.overflow = valve
         return br
 
+    def add_limiter(self, name: str, a: str, b: str, limiter, extra=(), sense_node: str | None = None) -> Branch:
+        """A branch a -> b throttled by a ThrottlingLimiter that senses `sense_node` (default: a,
+        the water arriving at it; give the loops' return node for a return-temperature limiter)."""
+        limiter.sense_node = sense_node or limiter.sense_node or a
+        br = self.add(name, a, b, [*extra, limiter.valve])
+        self.mixing_valves.append(limiter)
+        return br
+
     def add_mixing_valve(
         self, tmv: ThermostaticMixingValve, hot_from: str, cold_from: str, mixed: str, hot_extra=(), cold_extra=()
     ) -> None:

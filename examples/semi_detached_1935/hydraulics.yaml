@@ -82,9 +82,9 @@ branches:
     elements:
       - {type: valve, kv_max: $rad_kv, opening: {column: V_zolder, dead_band: 22, scale: 0.01}}
       - {type: emitter, space: T_zolder, q50: 4920, n: 1.3}
-  # Bathroom: one throttling limiter (25 C) in front of both the towel radiator and the floor loop.
-  # Where it senses is not known: 'sense: bath_in' = the water reaching it (supply side); change it to
-  # 'bath_ret' for a return-temperature limiter. bath_u_min = how far it stays open when hot.
+  # Bathroom: one RTL valve set to 25 C on the SUPPLY to both the towel radiator and the floor loop
+  # (confirmed by the owner), so it senses the supply water ('sense: bath_in'). With supply water above
+  # ~27 C it is mostly shut and pulses open as its body cools; bath_u_min stands for that average opening.
   - name: bath_limiter
     from: up_flow
     to: bath_in

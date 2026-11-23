@@ -1,0 +1,112 @@
+# Heating circuit of the semi-detached example (home_thermal.hydraulics).
+#
+#            ┌──────────── bypass (overflow valve, 0.5 -> 0.4 bar on 20 Nov 23:00) ───────────┐
+#            │                                                                                ▼
+#  Aurora ─► hp_out ─► flow_main ─┬─► manifold A: TMV 30 C + Wilo pump ─► living/kitchen ─┐
+#  (pump)                         ├─► manifold B: TMV 30 C + Wilo pump ─► utility + shed ──┤
+#    ▲                            └─► riser ─► 5 radiators (Tado valves) + bathroom loop ──┤
+#    │                                                                                    ▼
+#  hp_in ◄── tank (50 L buffer, in series on the return) ◄── buffer_in ◄── return_main ◄──┘
+#    ▲          │
+#    └── Edel ◄─┘   200 L hot-water heat pump: its own pump draws from the buffer, returns to hp_in
+#
+# Spaces (ctx keys): room sensor columns (T_*) and floor-slab temperatures (slab_*) from the
+# thermal model. "$name" values are parameters, calibrated on the measured heat-pump flow.
+reference: hp_in                      # expansion vessel on the heat pump return
+
+parameters:
+  hp_H0:      {value: 7.0, bounds: [3.0, 12.0], note: "Aurora internal pump shut-off head, m"}
+  hp_q0:      {value: 2.5, bounds: [1.0, 5.0],  note: "Aurora internal pump flow at zero head, m3/h"}
+  main_kv:    {value: 3.0, bounds: [0.5, 20.0], note: "heat pump unit + shed pipework, kv"}
+  riser_kv:   {value: 1.5, bounds: [0.3, 10.0], note: "pipes to the upstairs radiators, kv"}
+  rad_kv:     {value: 0.6, bounds: [0.1, 3.0],  note: "radiator + Tado valve fully open, kv"}
+  bath_kv:    {value: 0.15, bounds: [0.02, 1.0], note: "always-open bathroom floor loop, kv"}
+  tmv_kv:     {value: 1.6, bounds: [0.3, 6.0],  note: "manifold mixing valve, kv"}
+  ufh_speed:  {value: 0.8, bounds: [0.4, 1.0],  note: "manifold pumps' current setting (unknown), speed fraction"}
+  bypass_kv:  {value: 1.5, bounds: [0.2, 5.0],  note: "overflow valve fully open, kv"}
+
+branches:
+  - name: heat_pump
+    from: hp_in
+    to: hp_out
+    elements:
+      - {type: pump, name: hp_pump, curve: {H0: $hp_H0, q0: $hp_q0},
+         on: {column: HP_elec_W, above: 150}, kv_off: 0.3}
+      - {type: heat_source, name: heat_pump, t_out: {column: T_flow}}
+  - {name: main, from: hp_out, to: flow_main, elements: [{type: kv, kv: $main_kv}]}
+  - {name: bypass, from: hp_out, to: buffer_in, overflow: {p_open: {column: bypass_kpa}, kv_max: $bypass_kv, band: 10}}
+
+  - mixing_group:
+      name: ufh_a
+      from: flow_main
+      to: return_main
+      t_set: 30
+      kv: $tmv_kv
+      pump: {curve: wilo-para-25-6, mode: speed, setting: $ufh_speed, on: {column: UFH_A}}
+      loops: {kv: 1.0, UA: 240, space: slab_woonkamer}
+  - mixing_group:
+      name: ufh_b
+      from: flow_main
+      to: return_main
+      t_set: 30
+      kv: $tmv_kv
+      pump: {curve: wilo-para-25-6, mode: speed, setting: $ufh_speed, on: {column: UFH_B}}
+      loops:
+        - {name: bijkeuken, kv: 0.5, UA: 59, space: slab_bijkeuken}
+        - {name: berging, kv: 0.6, UA: 84, space: slab_berging}
+
+  - {name: riser, from: flow_main, to: up_flow, elements: [{type: kv, kv: $riser_kv}]}
+  - {name: up_return, from: up_ret, to: return_main, elements: [{type: kv, kv: $riser_kv}]}
+  - name: rad_slaapkamer
+    from: up_flow
+    to: up_ret
+    elements:
+      - {type: valve, kv_max: $rad_kv, opening: {column: V_slaapkamer, dead_band: 22, scale: 0.01}}
+      - {type: emitter, space: T_slaapkamer, q50: 3950, n: 1.3}
+  - name: rad_hobbykamer
+    from: up_flow
+    to: up_ret
+    elements:
+      - {type: valve, kv_max: $rad_kv, opening: {column: V_hobbykamer, dead_band: 22, scale: 0.01}}
+      - {type: emitter, space: T_hobbykamer, q50: 3520, n: 1.3}
+  - name: rad_inloopkast
+    from: up_flow
+    to: up_ret
+    elements:
+      - {type: valve, kv_max: $rad_kv, opening: {column: V_inloopkast, dead_band: 22, scale: 0.01}}
+      - {type: emitter, space: T_inloopkast, q50: 4380, n: 1.3}
+  - name: rad_zolder
+    from: up_flow
+    to: up_ret
+    elements:
+      - {type: valve, kv_max: $rad_kv, opening: {column: V_zolder, dead_band: 22, scale: 0.01}}
+      - {type: emitter, space: T_zolder, q50: 4920, n: 1.3}
+  - name: rad_badkamer
+    from: up_flow
+    to: up_ret
+    elements:
+      - {type: valve, kv_max: $rad_kv, opening: {column: V_badkamer, dead_band: 22, scale: 0.01}}
+      - {type: emitter, space: T_badkamer, q50: 2040, n: 1.25}
+  - name: bath_floor
+    from: up_flow
+    to: up_ret
+    elements:
+      - {type: kv, kv: $bath_kv}
+      - {type: emitter, space: slab_badkamer, UA: 24}
+
+  - name: to_buffer
+    from: return_main
+    to: buffer_in
+    elements: [{type: kv, kv: 6.0}]
+  - name: buffer
+    from: buffer_in
+    to: tank
+    elements: [{type: buffer, volume_l: 50, t0: 28, space: T_berging, loss_ua: 0.5, t_column: T_return}]
+  - {name: buffer_out, from: tank, to: hp_in, elements: [{type: kv, kv: 8.0}]}
+  - name: edel
+    from: tank
+    to: hp_in
+    elements:
+      - {type: pump, name: edel_pump, curve: {H0: 4.0, q0: 1.5}, on: {column: DHW_W, above: 5}, kv_off: 0.05}
+      - {type: kv, name: edel_hx, kv: 0.6}
+      - {type: heat_source, name: edel_source, power: {column: DHW_W, scale: -2.5}}

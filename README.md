@@ -15,7 +15,7 @@ what the data supports and what it does not.
 
 ## Packages
 
-One repository, five installable packages under the `home_thermal` namespace. Install only what
+One repository, six installable packages under the `home_thermal` namespace. Install only what
 you need.
 
 | Package (pip name) | Import | What it does | Depends on |
@@ -23,6 +23,7 @@ you need.
 | `home-thermal-core` | `home_thermal.core` | House config, RC network, heat pump / gas boiler, simulation, energy balance | numpy, scipy, pandas, pyyaml |
 | `home-thermal-calibrate` | `home_thermal.calibrate` | Fit to data, cross-validation, Kalman filter, forecasts | core |
 | `home-thermal-control` | `home_thermal.control` | Thermostats (PI, hysteresis) and pump logic for closed-loop what-ifs | core |
+| `home-thermal-hydraulics` | `home_thermal.hydraulics` | Heating circuit: pumps, valves, mixing valves, bypass, buffer; flows and water temperatures ([docs](docs/hydraulics.md)) | numpy, scipy, pyyaml |
 | `home-thermal-hass` | `home_thermal.hass` | Data from a Home Assistant recorder database | pandas, pyyaml |
 | `home-thermal` | `home_thermal.cli` | The `home-thermal` command, uses all of the above | all |
 
@@ -32,7 +33,7 @@ The packages are not on PyPI yet; install from a clone:
 git clone https://github.com/lmbollen/home_thermal
 cd home_thermal
 python -m venv .venv && . .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -e packages/core -e packages/calibrate -e packages/control -e packages/hass -e packages/cli
+pip install -e packages/core -e packages/calibrate -e packages/control -e packages/hass -e packages/hydraulics -e packages/cli
 ```
 
 Python 3.11 or newer.

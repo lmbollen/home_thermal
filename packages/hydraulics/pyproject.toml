@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "home-thermal-hydraulics"
+version = "0.1.0"
+description = "Composable hydraulic components (pumps, valves, mixing valves, bypass, buffer, emitters) and a circuit solver for home heating systems"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.24", "scipy>=1.10", "pyyaml>=6.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/home_thermal"]

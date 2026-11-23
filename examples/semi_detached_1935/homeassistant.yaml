@@ -44,7 +44,10 @@ setpoint_off: 5.0
 flow_column: water_flow
 circulating_above: 100       # L/h
 nominal_flow: 900            # L/h, statistics only
-water_sensor_offset_K: 0.85  # flow sensor reads 0.85 K above return at standstill (measured)
+water_sensor_offset_K: 0.87  # outlet reads 0.87 K high at standstill (the integration's auto calibration)
+water_offset_side: flow      # the integration attributes the offset to the outlet sensor
+water_offset_until: "2026-11-21T15:00:00Z"   # from the integration update on, outlet temperature and heat
+                                              # output arrive corrected: no second correction
 pv_energy: PV_kWh
 pump_running_W:              # statistics only: pump on-fraction = plug power / running power
   UFH_A: {power: P_ufh_A, running_W: 17.6}

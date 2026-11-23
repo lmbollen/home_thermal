@@ -86,3 +86,14 @@ def test_config_rejects_unknown_keys(tmp_path):
     p.write_text("entities: {T_out: sensor.x}\nhots: oops\n")
     with pytest.raises(ValueError, match="hots"):
         HassConfig.load(p)
+
+
+def test_offset_only_before_source_correction(db, hc):
+    hc.water_offset_side = "flow"
+    hc.water_offset_until = "2026-11-10 01:00"          # data from 01:00 on arrives corrected
+    df = load_states(db, hc, step="15min")
+    before, after = df.iloc[0], df.iloc[-1]
+    assert before["T_flow"] == pytest.approx(40.85 - 0.85) and before["T_return"] == pytest.approx(35.0)
+    assert after["T_flow"] == pytest.approx(40.85) and after["T_return"] == pytest.approx(35.0)
+    assert after["HP_heat_per_K"] == 0.0                # heat already corrected: no dT_off correction
+    assert before["HP_heat_per_K"] == 0.0 or df["HP_heat_per_K"].iloc[:4].max() > 0

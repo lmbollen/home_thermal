@@ -11,7 +11,8 @@ boundaries:              # priors of the fitted boundary temperatures
   T_ground: 11.0         # crawl space / ground under the floor in November
 
 parameters:
-  dT_off: {prior: 0.85}  # heat meter's flow sensor reads 0.85 K above return at standstill (measured)
+  dT_off: {prior: 0.87}  # offset inside the heat figure's raw dT; only applied to data before the
+                         # integration update (afterwards HP_heat_per_K is 0: the heat arrives corrected)
 
 zones:
   woonkamer:   {area: 40.0, volume: 100, ach: 0.8, sensor: T_woonkamer}     # living + kitchen

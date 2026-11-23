@@ -39,6 +39,8 @@ class HassConfig:
     circulating_above: float = 100.0
     nominal_flow: float = 900.0          # statistics only: typical flow while running (L/h)
     water_sensor_offset_K: float = 0.0   # flow reads this much above return at standstill
+    water_offset_side: str = "split"     # remove the offset from: 'split' (half each), 'flow' or 'return'
+    water_offset_until: str | None = None  # data from this time on is already corrected by the source
     pv_energy: str | None = None         # energy counter column (kWh) to derive PV_W from
     gas_counter: str | None = None       # gas meter total column (m3 or kWh) to derive gas per step from
     gas_column: str = "gas_m3"           # output column: gas used per step, in the counter's unit
@@ -95,20 +97,33 @@ def _to_num(s: pd.Series) -> pd.Series:
     return s.map(STATE_VALUES).fillna(pd.to_numeric(s, errors="coerce"))
 
 
-def correct_water_temps(df: pd.DataFrame, offset_K: float) -> pd.DataFrame:
-    """Remove a fixed flow/return sensor offset, half from each sensor (mean unchanged).
+def correct_water_temps(df: pd.DataFrame, offset_K: float, side: str = "split",
+                        until: str | None = None) -> pd.DataFrame:
+    """Remove a fixed flow/return sensor offset: from both sensors by half ('split', mean water
+    temperature unchanged), or all from the 'flow' or the 'return' sensor. With `until`, only rows
+    before that time are corrected (later data already corrected at the source).
     Raw values are kept as T_flow_raw / T_return_raw. Returns a new DataFrame."""
+    if side not in ("split", "flow", "return"):
+        raise ValueError(f"water_offset_side: 'split', 'flow' or 'return', got {side!r}")
     df = df.copy()
     df["T_flow_raw"], df["T_return_raw"] = df["T_flow"], df["T_return"]
-    df["T_flow"] = df["T_flow_raw"] - offset_K / 2
-    df["T_return"] = df["T_return_raw"] + offset_K / 2
+    on = _before(df.index, until)
+    f_part = {"split": 0.5, "flow": 1.0, "return": 0.0}[side] * offset_K
+    df["T_flow"] = df["T_flow_raw"] - np.where(on, f_part, 0.0)
+    df["T_return"] = df["T_return_raw"] + np.where(on, offset_K - f_part, 0.0)
     return df
 
 
-def _heat_per_K(df: pd.DataFrame, min_dT: float) -> pd.Series:
-    """Heat-meter output per K of RAW flow-return difference (for the meter offset correction)."""
+def _before(index: pd.DatetimeIndex, until) -> np.ndarray:
+    return np.ones(len(index), bool) if until is None else np.asarray(index < _utc(until))
+
+
+def _heat_per_K(df: pd.DataFrame, min_dT: float, until=None) -> pd.Series:
+    """Heat-meter output per K of RAW flow-return difference (for the meter offset correction).
+    Zero from `until` on, where the heat figure is already corrected at the source."""
     dT = df["T_flow"] - df["T_return"]
-    return (df["HP_heat_W"] / dT).where((dT > min_dT) & (df["HP_heat_W"] > 0), 0.0)
+    out = (df["HP_heat_W"] / dT).where((dT > min_dT) & (df["HP_heat_W"] > 0), 0.0)
+    return out.where(_before(df.index, until), 0.0)
 
 
 def _counter_steps(total: pd.Series, max_step: float) -> pd.Series:
@@ -154,8 +169,8 @@ def load_states(db, cfg: HassConfig, step: str = "15min") -> pd.DataFrame:
         df = df.join(load_setpoints(db, cfg, minute))
     if _has(df, "T_flow", "T_return"):
         if "HP_heat_W" in df:
-            df["HP_heat_per_K"] = _heat_per_K(df, 0.3)
-        df = correct_water_temps(df, cfg.water_sensor_offset_K)
+            df["HP_heat_per_K"] = _heat_per_K(df, 0.3, cfg.water_offset_until)
+        df = correct_water_temps(df, cfg.water_sensor_offset_K, cfg.water_offset_side, cfg.water_offset_until)
     if cfg.flow_column in df:
         circ = df[cfg.flow_column] > cfg.circulating_above
         if "T_flow" in df:
@@ -242,8 +257,8 @@ def load_statistics(db, cfg: HassConfig, start=None, end=None, step: str = "15mi
         h["circ"] = np.where(full, 1.0, (h[cfg.flow_column] / cfg.nominal_flow).clip(0, 1))
     if _has(h, "T_flow", "T_return"):
         if "HP_heat_W" in h:
-            h["HP_heat_per_K"] = _heat_per_K(h, 0.5)
-        h = correct_water_temps(h, cfg.water_sensor_offset_K)
+            h["HP_heat_per_K"] = _heat_per_K(h, 0.5, cfg.water_offset_until)
+        h = correct_water_temps(h, cfg.water_sensor_offset_K, cfg.water_offset_side, cfg.water_offset_until)
         if "circ" in h:
             h["T_water"] = ((h["T_flow"] + h["T_return"]) / 2).where(h["circ"] > 0.05)
     if cfg.pv_energy and cfg.pv_energy in hsum:

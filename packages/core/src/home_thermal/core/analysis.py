@@ -52,6 +52,8 @@ def energy_balance(net: Network, sim: dict, start=None) -> dict:
         src.append(("info", "hot water: electricity", tank_in / cop))
         src.append(("info", "hot water: heat taken from heating circuit", extracted))
         losses.append((cfg["dhw"]["zone"], "hot water drawn", "taps", tap))
+    if np.any(sim.get("pipes", 0)):
+        src.append(("info", "heat source: lost by the outdoor pipes", sim["pipes"][keep].sum() * h))
     src.append(("free", "sun through windows", sim["Qs"][keep].sum() * h))
     src.append(("free", "background gain", sim["Qi"][keep].sum() * h))
     if np.any(sim["Qx"]):

@@ -69,6 +69,11 @@ GENERIC: dict[str, Param] = {
     "dT_off": _lin(0.0, 0.15, (-1.5, 1.5), "flow/return sensor offset in the heat meter's own dT (K); "
                    "set the prior to your measured standstill offset", fixed=True),
     "UA_hp": _lin(10.0, 10.0, (0.0, 60.0), "heat pump unit + pipework losses into its zone (W/K)"),
+    # fixed: while running it rises and falls with the house's own demand, so the data cannot tell
+    # it apart from the heat loss and the COP; the prior comes from heat_pump.outdoor_pipes
+    "UA_pipe_out": _lin(2.0, 1.0, (0.0, 30.0), "losses of the water pipes outdoors, monoblock heat pump "
+                        "(W/K, mean water temperature - outdoor); metered as output, never reaches the house",
+                        fixed=True),
     # gas boiler
     # fixed: room temperatures + gas only identify heat demand / efficiency, not both; set the prior
     # from the boiler type and the gas meter then pins the heat demand (and H_house)
@@ -134,6 +139,11 @@ def parameter_set(cfg: dict) -> dict[str, Param]:
         out.update({n: GENERIC[n] for n in HEAT_PUMP_PARAMS})
         if cfg["heat_pump"].get("zone"):
             out["UA_hp"] = GENERIC["UA_hp"]
+        op = cfg["heat_pump"].get("outdoor_pipes")
+        if op:
+            ua = float(op["length_m"] * op["W_per_mK"])
+            out["UA_pipe_out"] = replace(GENERIC["UA_pipe_out"], prior=ua, sigma=0.5 * ua,
+                                         bounds=(0.0, max(5.0 * ua, 1.0)))
     if cfg["dhw"]:
         out.update({n: GENERIC[n] for n in ("cop_dhw", "UA_tank", "tap_W")})
 

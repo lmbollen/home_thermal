@@ -121,7 +121,14 @@ emitters:
     badkamer:  {area: 4.0,  K_ws: 15, h_sa: 10.8, c: 60000,  pump: always}
 
 # Air-water heat pump (7 kW R290 monoblock). Its indoor parts and bare pipes stand in the shed.
-heat_pump: {zone: berging, standby_W: 7}
+heat_pump:
+  zone: berging
+  standby_W: 7
+  # Flow and return run about 3 m each outdoors to the monoblock, insulated. 0.3 W/mK is intact
+  # outdoor insulation (~0.2) plus the bare fittings and wall passage; frost melting along them in
+  # Nov 2026 shows they do lose some heat. About 50 W at -1 C outside. A free fit asked for 10.6 W/K
+  # (bare-pipe level, not credible): the rest of the meter-model gap in frost is something else.
+  outdoor_pipes: {length_m: 6, W_per_mK: 0.3}
 
 # 200 L water/water hot-water heat pump in the shed; takes its source heat from the heating return.
 dhw: {zone: berging, volume_l: 200, power: DHW_W, on_threshold_W: 5, T_cold: 10, T_max: 60}

@@ -85,7 +85,18 @@ def emitter_heat(net: Network, x: np.ndarray, row: dict) -> tuple[np.ndarray, fl
         h = p[ua] * (tw - x[net.iA[hz]]) * circ
         q[net.iA[hz]] += h
         q_source += h
-    return q, q_source + extracted
+    return q, q_source + extracted + outdoor_pipe_loss(net, row)
+
+
+def outdoor_pipe_loss(net: Network, row: dict) -> float:
+    """Heat lost by the water pipes outdoors (monoblock heat pump), W: UA_pipe_out x (mean water
+    temperature - outdoor) while water circulates. The heat pump produces (and its meter counts)
+    this heat, but it never reaches a zone. 0 without heat_pump.outdoor_pipes."""
+    ua = net.p.get("UA_pipe_out")
+    tw, circ, t_out = row.get("T_water", np.nan), row.get("circ", 0.0), row.get("T_out", np.nan)
+    if not ua or not (circ > 0) or tw is None or np.isnan(tw) or t_out is None or np.isnan(t_out):
+        return 0.0
+    return float(max(ua * (tw - t_out), 0.0) * circ)
 
 
 def source_zone(cfg: dict) -> tuple[str | None, str | None]:

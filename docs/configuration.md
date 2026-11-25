@@ -157,6 +157,23 @@ Used only when the data has heat-pump measurements (`HP_heat_W` and/or `HP_elec_
 off and uses `standby_W`. `zone` (optional): where the indoor unit and pipework lose heat
 (parameter `UA_hp`).
 
+A monoblock heat pump stands outside, and the water pipes between it and the house lose heat that
+its own meter still counts as output:
+
+```yaml
+heat_pump:
+  zone: shed
+  outdoor_pipes: {length_m: 4, W_per_mK: 1.0}   # flow + return together, outside the insulation
+```
+
+This adds `UA_pipe_out` = `length_m` × `W_per_mK` (W/K), with loss `UA_pipe_out × (T_water − T_out)`
+while water circulates. It is added to the heat the source must produce (heat meter, electricity),
+not to any room. Rough `W_per_mK` per metre of pipe at 22-28 mm: about 0.15-0.25 with 20-30 mm of
+intact insulation, 0.4-0.6 with thin or damaged insulation, 1-2 bare or wet. The parameter is fixed at
+that prior, because while the unit runs the loss rises and falls with the house's own demand and the
+data cannot separate them; free it (`--free UA_pipe_out`) only after something changes it on its own,
+e.g. new insulation.
+
 ## boiler
 
 A gas boiler instead of a heat pump (configure one of the two):

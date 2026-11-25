@@ -8,7 +8,7 @@ import pandas as pd
 
 from .data import check_inputs, prepare, step_seconds
 from .network import Network
-from .physics import background_gain, dhw_heat, emitter_heat, solar_gain
+from .physics import background_gain, dhw_heat, emitter_heat, outdoor_pipe_loss, solar_gain
 
 
 class StepController(Protocol):
@@ -33,6 +33,7 @@ def simulate(net: Network, df: pd.DataFrame, x0: np.ndarray | None = None,
     N = len(df)
     X, Qsrc, Qe = np.zeros((N, net.n)), np.zeros(N), np.zeros((N, net.n))
     tank = np.zeros((N, 3))                          # into tank, tap draw, extracted
+    pipes = np.zeros(N)                              # lost by the outdoor pipes
     sun, bg = solar_gain(net, df), background_gain(net, df)
     gains = sun + bg + (0.0 if q_extra is None else q_extra)
     tb = np.array([net.boundary_temps(t) for t in df["T_out"].ffill().bfill().to_numpy()])
@@ -44,13 +45,15 @@ def simulate(net: Network, df: pd.DataFrame, x0: np.ndarray | None = None,
         Qe[k], Qsrc[k] = emitter_heat(net, x, row)
         if record and net.iT is not None:
             tank[k] = dhw_heat(net, x, row)
+        if record:
+            pipes[k] = outdoor_pipe_loss(net, row)
         x = Ad @ x + Bb @ tb[k] + Bq @ (Qe[k] + gains[k])
     states = pd.DataFrame(X, index=df.index, columns=net.names)
     heat = pd.Series(Qsrc, index=df.index)
     if not record:
         return states, heat
     return states, heat, dict(Qe=Qe, Qs=sun, Qi=bg, Qx=np.zeros_like(sun) if q_extra is None else gains - sun - bg,
-                              tank=tank, Tb=tb, dt=dt, index=df.index)
+                              tank=tank, pipes=pipes, Tb=tb, dt=dt, index=df.index)
 
 
 def initial_state(net: Network, df) -> np.ndarray:

@@ -35,7 +35,8 @@ ELEMENT_KEYS = {"kind", "area", "U", "solar", "ufh"}
 EMITTER_KEYS = {"radiator_model", "valve_sensor_tau_h", "radiators", "floor_heating"}
 RADIATOR_KEYS = {"q50", "n", "valve", "sensor_on_valve", "flow_lph"}
 FLOOR_KEYS = {"area", "K_ws", "h_sa", "c", "pump"}
-HEAT_PUMP_KEYS = {"zone", "dT_cond", "dT_evap", "standby_W", "running_min_W"}
+HEAT_PUMP_KEYS = {"zone", "dT_cond", "dT_evap", "standby_W", "running_min_W", "outdoor_pipes"}
+OUTDOOR_PIPE_KEYS = {"length_m", "W_per_mK"}
 HP_DEFAULTS = {"dT_cond": 3.0, "dT_evap": 6.0, "standby_W": 7.0, "running_min_W": 50.0}
 BOILER_KEYS = {"zone", "gas_column", "gas_unit", "kwh_per_m3", "dhw_flag"}
 GAS_UNITS = ("m3", "kWh", "W")
@@ -207,12 +208,19 @@ def _check_heat_sources(c):
         _zone(hp["zone"], zones, "heat_pump.zone")
     hp.setdefault("zone", None)
     if c["boiler"] is not None:
-        if hp.get("zone") is not None or any(hp.get(k, v) != v for k, v in HP_DEFAULTS.items()):
+        if (hp.get("zone") is not None or hp.get("outdoor_pipes") is not None
+                or any(hp.get(k, v) != v for k, v in HP_DEFAULTS.items())):
             raise ConfigError("heat_pump and boiler: configure one heat source, not both")
         _check_boiler(c)
     for k, v in HP_DEFAULTS.items():
         hp.setdefault(k, v)
         _number(hp, k, "heat_pump", minimum=0)
+    hp.setdefault("outdoor_pipes", None)
+    if hp["outdoor_pipes"] is not None:
+        op = _mapping(hp["outdoor_pipes"], "heat_pump.outdoor_pipes")
+        _keys(op, OUTDOOR_PIPE_KEYS, "heat_pump.outdoor_pipes")
+        _number(op, "length_m", "heat_pump.outdoor_pipes", positive=True)
+        _number(op, "W_per_mK", "heat_pump.outdoor_pipes", positive=True)
     if c["dhw"]:
         d = c["dhw"]
         _keys(d, DHW_KEYS, "dhw")

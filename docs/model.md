@@ -21,6 +21,8 @@ are evaluated each step:
   Output = Ċ (T_flow − T_air)(1 − exp(−UA/Ċ)), with UA from the catalogue curve × `m_rad`.
 - **floor heating**: `m_ufh × K_ws × area × (T_water − T_slab) × pump × circ`.
 - **heat-source zone**: `UA_hp × (T_water − T_zone) × circ` (unit and pipe losses).
+- **outdoor pipes** (optional): `UA_pipe_out × (T_water − T_out) × circ`; produced and metered by the
+  heat source, but lost outside: it adds to the source heat, not to any node.
 - **sun**: `g_sol × solar proxy`, spread over windows by area × orientation weight.
 - **background gain**: `Q_int`, spread over occupied zones by floor area.
 - **hot-water tank**: `cop_dhw × P_el` in, tap draw `tap_W` out; the source heat

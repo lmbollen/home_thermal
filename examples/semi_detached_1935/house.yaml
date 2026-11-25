@@ -19,7 +19,7 @@ parameters:
 
 zones:
   woonkamer:   {area: 40.0, volume: 100, ach: 0.8, sensor: T_woonkamer}     # living + kitchen
-  hal:         {area: 13.0, volume: 33,  ach: 1.0, occupied: false}         # hall + stairs + landing, unheated (its radiator with a Tado X is kept off)
+  hal:         {area: 13.0, volume: 33,  ach: 1.0, occupied: false}         # hall + stairs + landing, unheated (Tado's 'Hal Klein' zone is NOT this: it was the space that is now the bijkeuken)
   bijkeuken:   {area: 9.9,  volume: 25,  ach: 0.5}                          # utility room + toilet
   berging:     {area: 14.0, volume: 35,  ach: 0.5, sensor: T_berging, occupied: false, in_house_loss: false}  # heated shed
   slaapkamer:  {area: 14.0, volume: 34,  ach: 0.8, sensor: T_slaapkamer}    # bedroom

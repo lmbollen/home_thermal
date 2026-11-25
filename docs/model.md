@@ -17,7 +17,8 @@ air nodes of different zones.
 The linear part is discretised exactly (matrix exponential, zero-order hold); the heat inputs q
 are evaluated each step:
 
-- **radiators**, ntu model: water at `T_flow` flows at `m_flow × design flow × (valve − v0)/(100 − v0)`.
+- **radiators**, ntu model: water at `T_flow` flows at `m_flow × m_flow_<zone> × design flow × (valve − v0)/(100 − v0)`;
+  `m_flow_<zone>` (default 1) is that radiator's own share of the circuit's water.
   Output = Ċ (T_flow − T_air)(1 − exp(−UA/Ċ)), with UA from the catalogue curve × `m_rad`.
 - **floor heating**: `m_ufh × K_ws × area × (T_water − T_slab) × pump × circ`.
 - **heat-source zone**: `UA_hp × (T_water − T_zone) × circ` (unit and pipe losses).
@@ -43,7 +44,9 @@ are fitted linearly (`T_ground`, `T_neighbour`, `Q_int`, `v0`, `kappa_q`, `kappa
 house.yaml`, or [params.py](../packages/core/src/home_thermal/core/params.py). A parameter exists
 only when something in the house uses it.
 
-Fixed by default (held at the prior): `m_win`, `m_air`, `m_Cair`, `m_flow`, `dT_off` (prior 0:
+Fixed by default (held at the prior): `m_win`, `m_air`, `m_Cair`, `m_flow`, `m_flow_<zone>` (free them with
+`--free m_flow_bedroom,...` to let room heat-up rank the radiators' water supply; they also absorb any
+unmodelled heat in that room, such as from pipes), `dT_off` (prior 0:
 set it to your measured meter offset), `eta_boiler` (set it from the boiler type), `cop_dhw`,
 `UA_tank`, `tap_W`. Room temperatures alone rarely separate these from other parameters; fitting
 them lets them compensate for errors elsewhere. Free them per house under `parameters:` if you

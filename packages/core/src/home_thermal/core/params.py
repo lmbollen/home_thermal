@@ -93,6 +93,10 @@ F_OFF = _lin(0.05, 0.2, (0.0, 1.0), "residual flow fraction with the pump off")
 # home_thermal.calibrate.fit.data_terms). fit() leaves a parameter at its prior without its term.
 DATA_TERM_PARAMS = {"k_meter": "heat meter", "dT_off": "heat meter", "eta_hp": "electricity",
                     "P_aux_hp": "electricity", "eta_boiler": "gas"}
+# Per radiator (ntu): its own flow vs the others', on top of m_flow. Fixed by default: with only the
+# heat-pump flow measured, room heat-up is what tells the radiators apart (free them by name).
+M_FLOW_ZONE = Param(1.0, 0.7, "log", (0.05, 5.0), True,
+                    "this radiator's water flow vs design, relative to m_flow (ntu)")
 HEAT_PUMP_PARAMS = ("eta_hp", "P_aux_hp", "k_meter", "dT_off")
 
 
@@ -128,6 +132,9 @@ def parameter_set(cfg: dict) -> dict[str, Param]:
         on_valve = any(r["sensor_on_valve"] for r in em["radiators"].values())
         model_params = ("v0", "m_flow", "kappa_q") if em["radiator_model"] == "ntu" else ("gamma_v", "kappa_s")
         out.update({n: GENERIC[n] for n in model_params[:-1]})
+        if em["radiator_model"] == "ntu":       # each radiator's own share of the flow (fit with --free)
+            for z in em["radiators"]:
+                out[f"m_flow_{z}"] = M_FLOW_ZONE
         if on_valve:
             out[model_params[-1]] = GENERIC[model_params[-1]]
     if cfg["boiler"] is not None:

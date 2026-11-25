@@ -44,3 +44,19 @@ def test_vectorised_matches_scalar(cfg):
 
 def test_demo_has_no_tank():
     assert Network(demo_house()).iT is None
+
+
+def test_radiator_own_flow_share(cfg):
+    """m_flow_<zone>: a radiator starved of water gives less, most at small openings; others unchanged."""
+    from home_thermal.core import default_free, parameter_set
+    ps = parameter_set(cfg)
+    assert "m_flow_bedroom" in ps and ps["m_flow_bedroom"].fixed
+    assert "m_flow_bedroom" not in default_free(cfg)
+    r = cfg["emitters"]["radiators"]["bedroom"]
+    row = {"T_flow": 45.0, "T_water": 42.0, "circ": 1.0}
+    full = Network(cfg)
+    starved = Network(cfg, {"m_flow_bedroom": 0.2})
+    for v in (40, 100):
+        assert radiator_heat(starved, r, v, row, 20.0, "bedroom") < radiator_heat(full, r, v, row, 20.0, "bedroom")
+    assert radiator_heat(starved, r, 100, row, 20.0) == radiator_heat(full, r, 100, row, 20.0)   # no zone: shared
+    assert heat(starved, 100) == heat(full, 100)

@@ -23,13 +23,14 @@ def valve_value(r: dict, data) -> float | np.ndarray:
     return v if isinstance(data, dict) else np.full(len(data), float(v))
 
 
-def radiator_heat(net: Network, r: dict, valve, row, t_air):
+def radiator_heat(net: Network, r: dict, valve, row, t_air, zone: str | None = None):
     """Radiator output (W). Works on scalars (row = dict) or arrays (row = DataFrame).
 
-    ntu: flow-limited heat exchanger. Water enters at T_flow; flow = m_flow * design flow *
+    ntu: flow-limited heat exchanger. Water enters at T_flow; flow = m_flow * m_flow_<zone> * design flow *
          max(0, (valve - v0)/(100 - v0)); Q = Cdot (T_in - T_air)(1 - exp(-UA/Cdot)).
          Small openings: limited by flow (thermostatic-valve behaviour). Large openings: limited by
-         the radiator surface (catalogue q50 curve, scaled by m_rad).
+         the radiator surface (catalogue q50 curve, scaled by m_rad). m_flow_<zone> (default 1)
+         is this radiator's own share of the water: how the circuit's flow divides between them.
     catalogue: Q = m_rad q50 (dT/49.83)^n (valve/100)^gamma_v at the mean water temperature."""
     p = net.p
     v = np.clip(np.nan_to_num(np.asarray(valve, float)), 0.0, 100.0)
@@ -38,7 +39,8 @@ def radiator_heat(net: Network, r: dict, valve, row, t_air):
         dT = np.nan_to_num(np.asarray(row["T_flow"], float) - t_air)
         frac = np.clip((v - p["v0"]) / (100.0 - p["v0"]), 0.0, 1.0)
         flow = r.get("flow_lph", r["q50"] / (CP_WATER * 10.0) * 3600.0)     # L/h at 100 %, 10 K drop
-        cdot = p["m_flow"] * flow / 3600.0 * CP_WATER * frac                # W/K
+        own = p.get(f"m_flow_{zone}", 1.0) if zone else 1.0
+        cdot = p["m_flow"] * own * flow / 3600.0 * CP_WATER * frac          # W/K
         ua = p["m_rad"] * r["q50"] / DT50 ** r["n"] * np.maximum(dT, 0.5) ** (r["n"] - 1.0)
         eff = np.where(cdot > 0, cdot * (1.0 - np.exp(-ua / np.maximum(cdot, 1e-9))), 0.0)
     else:
@@ -72,7 +74,7 @@ def emitter_heat(net: Network, x: np.ndarray, row: dict) -> tuple[np.ndarray, fl
         return q, extracted
     q_source = 0.0
     for z, r in em["radiators"].items():
-        h = radiator_heat(net, r, valve_value(r, row), row, x[net.iA[z]])
+        h = radiator_heat(net, r, valve_value(r, row), row, x[net.iA[z]], z)
         q[net.iA[z]] += h
         q_source += h
     for z, u in em["floor_heating"].items():
@@ -158,7 +160,7 @@ def valve_sensor_warming(net: Network, z: str, row, t_air):
         return 0.0 * np.asarray(t_air)
     v = valve_value(r, row)
     if net.cfg["emitters"]["radiator_model"] == "ntu":
-        return net.p["kappa_q"] * radiator_heat(net, r, v, row, t_air) / 100.0
+        return net.p["kappa_q"] * radiator_heat(net, r, v, row, t_air, z) / 100.0
     excess = np.nan_to_num(np.clip(np.asarray(row["T_water"], float) - t_air, 0, None))
     return (net.p["kappa_s"] * np.clip(np.nan_to_num(np.asarray(v, float)) / 100.0, 0, 1) * excess
             * np.nan_to_num(np.asarray(row["circ"], float)))

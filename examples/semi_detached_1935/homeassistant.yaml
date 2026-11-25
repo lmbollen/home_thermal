@@ -25,6 +25,7 @@ entities:
   T_flow:       sensor.berging_aurora_iii_water_outlet_temperature
   T_return:     sensor.berging_aurora_iii_water_inlet_temperature
   water_flow:   sensor.berging_aurora_iii_water_flow                  # L/h
+  defrost:      binary_sensor.berging_aurora_iii_defrost              # from 23 Nov 2026
   PV_kWh:       sensor.grillplats_plug_energie_4                      # PV energy counter -> PV_W
   DHW_W:        sensor.grillplats_plug_vermogen_3                     # hot-water heat pump (smart plug)
   P_ufh_A:      sensor.grillplats_plug_vermogen
@@ -48,6 +49,14 @@ water_sensor_offset_K: 0.87  # outlet reads 0.87 K high at standstill (the integ
 water_offset_side: flow      # the integration attributes the offset to the outlet sensor
 water_offset_until: "2026-11-21T15:00:00Z"   # from the integration update on, outlet temperature and heat
                                               # output arrive corrected: no second correction
+defrost:
+  # Before integration v0.8.6 (25 Nov 2026 08:21 local) the heat output stayed positive or went
+  # missing while defrosting (water cooled 3-6 K). The pump computes heat as 133 W per 0.1 m3/h
+  # per K: 1330 W/K at the ~1.0 m3/h it reads in defrost (14% above water's 1163; k_meter absorbs
+  # the common scale). Without the flag (before 23 Nov) the detector found 98 of 100 flagged minutes.
+  W_per_K: 1330
+  flag: defrost
+  until: "2026-11-25T07:21:00Z"
 pv_energy: PV_kWh
 pump_running_W:              # statistics only: pump on-fraction = plug power / running power
   UFH_A: {power: P_ufh_A, running_W: 17.6}

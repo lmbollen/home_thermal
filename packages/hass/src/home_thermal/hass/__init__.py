@@ -7,6 +7,7 @@
 """
 from .source import (
                      HassConfig,
+                     correct_defrost,
                      correct_water_temps,
                      fetch_db,
                      household_power,
@@ -16,5 +17,5 @@ from .source import (
                      load_statistics,
 )
 
-__all__ = ["HassConfig", "correct_water_temps", "fetch_db", "household_power", "load_full", "load_setpoints",
-           "load_states", "load_statistics"]
+__all__ = ["HassConfig", "correct_defrost", "correct_water_temps", "fetch_db", "household_power", "load_full",
+           "load_setpoints", "load_states", "load_statistics"]

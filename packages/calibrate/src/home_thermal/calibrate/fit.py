@@ -67,9 +67,12 @@ def meter_heat_true(df: pd.DataFrame, p: dict) -> pd.Series:
 
     Meters that compute Q = c * dT_raw report too much heat when dT_raw contains a sensor offset:
     Q_true = k_meter * (Q_rep - dT_off * Q_rep/dT_raw). Q_rep/dT_raw comes from the data source as
-    HP_heat_per_K (absent = no offset correction)."""
+    HP_heat_per_K (absent = no offset correction). Negative readings (heat taken back out of the
+    water, e.g. defrost) are kept; the offset correction never turns heating into cooling."""
     per_k = df["HP_heat_per_K"].fillna(0) if "HP_heat_per_K" in df else 0.0
-    return p["k_meter"] * (df["HP_heat_W"] - p["dT_off"] * per_k).clip(lower=0)
+    q = df["HP_heat_W"]
+    corrected = q - p["dT_off"] * per_k
+    return p["k_meter"] * corrected.where(q < 0, corrected.clip(lower=0))
 
 
 def data_terms(cfg: dict, df: pd.DataFrame) -> set[str]:

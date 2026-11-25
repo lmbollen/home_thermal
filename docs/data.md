@@ -93,6 +93,20 @@ All keys: `HassConfig` in [source.py](../packages/hass/src/home_thermal/hass/sou
   stopped, put that difference here; both sensors are corrected by half. If your heat meter
   computes heat from the raw sensors, also set the same value as the prior of `dT_off` in the
   house config (`parameters: {dT_off: {prior: 0.85}}`).
+- `defrost`: for air-source heat pumps whose heat figure stays positive (or goes missing) while
+  they defrost, although the water is then being cooled. In defrost minutes `HP_heat_W` becomes
+  `W_per_K` x (flow - return), negative; a `defrost` column (1 in defrost) is added.
+  ```yaml
+  defrost:
+    W_per_K: 1163        # heat per K of flow-return difference: 1163 x the flow in m3/h, or the
+                         # heat pump's own constant if it computes heat as constant x flow x dT
+    flag: defrost        # optional: data column that is 1 in defrost (e.g. a binary_sensor)
+    min_elec_W: 200      # without the flag: defrost = drawing more than this...
+    min_dT: 1.0          # ...while the flow is more than this colder than the return (K)
+    until: "2026-11-25T07:21:00Z"   # optional: the source corrects defrost itself from then on
+  ```
+  Only full-resolution states are corrected: hourly statistics (`statistics_start`) still include
+  any defrost overcount. The calibration keeps negative meter readings (`meter_heat_true`).
 - `pv_energy`: derive `PV_W` from an energy counter (kWh) instead of a power sensor.
 - `gas_counter`: the column of a gas meter's total (e.g. from the P1/DSMR integration); gas per
   step is derived from it into `gas_column` (default `gas_m3`; use the counter's unit in the house

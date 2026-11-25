@@ -1,10 +1,12 @@
 import json
 import sqlite3
 
+import numpy as np
 import pandas as pd
 import pytest
 
-from home_thermal.hass import HassConfig, household_power, load_full, load_states
+from home_thermal.calibrate import meter_heat_true
+from home_thermal.hass import HassConfig, correct_defrost, household_power, load_full, load_states
 
 T0 = pd.Timestamp("2026-11-10 00:00", tz="UTC").timestamp()
 
@@ -97,3 +99,64 @@ def test_offset_only_before_source_correction(db, hc):
     assert after["T_flow"] == pytest.approx(40.85) and after["T_return"] == pytest.approx(35.0)
     assert after["HP_heat_per_K"] == 0.0                # heat already corrected: no dT_off correction
     assert before["HP_heat_per_K"] == 0.0 or df["HP_heat_per_K"].iloc[:4].max() > 0
+
+
+def minutes(n=6, **cols):
+    idx = pd.date_range("2026-11-24 00:00", periods=n, freq="1min", tz="UTC")
+    return pd.DataFrame(cols, index=idx)
+
+
+def spec(**kw):
+    return {"W_per_K": 1000.0, "flag": None, "min_elec_W": 200.0, "min_dT": 1.0, "until": None, **kw}
+
+
+def test_defrost_heat_from_the_water_cooling():
+    # minutes 2-3: compressor on, water cooled 4 K, heat pump still reports +3 kW
+    df = minutes(T_flow=[30, 30, 26, 26, 30, 30.0], T_return=[26, 26, 30, 30, 26, 26.0],
+                 HP_heat_W=[4000, 4000, 3000, np.nan, 4000, 4000.0], HP_elec_W=[900, 900, 700, 700, 900, 50.0],
+                 HP_heat_per_K=[1000, 1000, 0, 0, 1000, 1000.0])
+    out = correct_defrost(df, spec())
+    assert out["defrost"].tolist() == [0, 0, 1, 1, 0, 0]
+    assert out["HP_heat_W"].tolist() == [4000, 4000, -4000, -4000, 4000, 4000]   # missing filled too
+    assert out["HP_heat_per_K"].iloc[2:4].tolist() == [0, 0]
+
+
+def test_defrost_flag_wins_where_present_detector_fills_gaps():
+    df = minutes(T_flow=[26, 26, 26, 26, 30, 30.0], T_return=[30.0] * 4 + [26, 26.0],
+                 HP_heat_W=[3000.0] * 6, HP_elec_W=[700.0] * 6, DF=[np.nan, np.nan, 0, 1, 1, 0])
+    out = correct_defrost(df, spec(flag="DF"))
+    # no flag yet: detected; flag 0 although cooling (e.g. after a stop): not defrost; flag 1: defrost
+    assert out["defrost"].tolist() == [1, 1, 0, 1, 1, 0]
+    assert out["HP_heat_W"].iloc[4] == pytest.approx(4000.0)     # flagged while warming: +4 K x 1000
+
+
+def test_defrost_only_before_the_source_fixes_it():
+    df = minutes(T_flow=[26.0] * 6, T_return=[30.0] * 6, HP_heat_W=[-5000.0] * 3 + [3000.0] * 3,
+                 HP_elec_W=[700.0] * 6)
+    out = correct_defrost(df, spec(until="2026-11-24 00:03"))
+    assert out["defrost"].tolist() == [1] * 6
+    assert out["HP_heat_W"].tolist() == [-4000.0] * 3 + [3000.0] * 3
+
+
+def test_defrost_config_is_checked(tmp_path):
+    p = tmp_path / "ha.yaml"
+    p.write_text("entities: {T_out: sensor.x}\ndefrost: {W_per_K: 1330, flagg: df}\n")
+    with pytest.raises(ValueError, match="flagg"):
+        HassConfig.load(p)
+    p.write_text("entities: {T_out: sensor.x}\ndefrost: {flag: df}\n")
+    with pytest.raises(ValueError, match="W_per_K"):
+        HassConfig.load(p)
+    p.write_text("entities: {T_out: sensor.x}\ndefrost: {W_per_K: 1330}\n")
+    assert HassConfig.load(p).defrost["min_dT"] == 1.0
+
+
+def test_loader_applies_defrost(db, hc):
+    hc.defrost = {"W_per_K": 1000.0, "min_elec_W": 0.0001}
+    df = load_states(db, hc, step="15min")          # flow warmer than return throughout: no defrost
+    assert (df["defrost"] == 0).all()
+
+
+def test_meter_keeps_negative_heat():
+    df = pd.DataFrame({"HP_heat_W": [-4000.0, 100.0, 5000.0], "HP_heat_per_K": [0.0, 200.0, 1000.0]})
+    q = meter_heat_true(df, {"k_meter": 0.9, "dT_off": 0.85})
+    assert q.tolist() == pytest.approx([-3600.0, 0.0, 0.9 * (5000 - 850)])

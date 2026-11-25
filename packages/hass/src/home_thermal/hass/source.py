@@ -49,6 +49,8 @@ class HassConfig:
     household_power: dict | None = None  # {column, plus: [...], minus: [...]}
     statistics_start: str | None = None
     kw_columns: list = field(default_factory=list)   # columns whose entity reports kW in the states table
+    # heat pumps whose heat figure stays positive while defrosting (see correct_defrost)
+    defrost: dict | None = None
 
     @classmethod
     def load(cls, path: str | Path) -> HassConfig:
@@ -64,7 +66,29 @@ class HassConfig:
             raise ValueError(f"{path}: unknown keys {sorted(unknown)}; allowed: {sorted(cls.__dataclass_fields__)}")
         if not isinstance(d.get("entities"), dict) or not d["entities"]:
             raise ValueError(f"{path}: 'entities' is required (data column -> entity_id)")
-        return cls(**d)
+        cfg = cls(**d)
+        cfg.defrost = _defrost_spec(cfg.defrost, path)
+        return cfg
+
+
+DEFROST_KEYS = {"W_per_K", "flag", "min_elec_W", "min_dT", "until"}
+
+
+def _defrost_spec(d, where="defrost") -> dict | None:
+    """Validated `defrost` settings with defaults filled in (None = no defrost correction)."""
+    if d is None:
+        return None
+    if not isinstance(d, dict):
+        raise ValueError(f"{where}: defrost: expected a mapping with at least W_per_K")
+    unknown = set(d) - DEFROST_KEYS
+    if unknown:
+        raise ValueError(f"{where}: defrost: unknown keys {sorted(unknown)}; allowed: {sorted(DEFROST_KEYS)}")
+    out = {"flag": None, "min_elec_W": 200.0, "min_dT": 1.0, "until": None, **d}
+    for k in ("W_per_K", "min_elec_W", "min_dT"):
+        v = out.get(k)
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or v <= 0:
+            raise ValueError(f"{where}: defrost.{k}: a number > 0 is required, got {v!r}")
+    return out
 
 
 def fetch_db(cfg: HassConfig, dest: str | Path) -> Path:
@@ -116,6 +140,29 @@ def correct_water_temps(df: pd.DataFrame, offset_K: float, side: str = "split",
 
 def _before(index: pd.DatetimeIndex, until) -> np.ndarray:
     return np.ones(len(index), bool) if until is None else np.asarray(index < _utc(until))
+
+
+def correct_defrost(df: pd.DataFrame, spec: dict) -> pd.DataFrame:
+    """Heat taken back out of the water while an air-source heat pump defrosts.
+
+    Some heat pumps keep reporting positive (or no) heat output while the four-way valve is reversed
+    and the water is cooled. In defrost steps HP_heat_W becomes W_per_K x (T_flow - T_return):
+    negative. A step is in defrost where the `flag` column says so; where it is missing (or there
+    is none), where the heat pump draws more than min_elec_W while the flow is more than min_dT
+    colder than the return. Only before `until` (from then on the source corrects it).
+    Adds `defrost` (1 in defrost). Expects 1-minute (or similar) rows. Returns a new DataFrame."""
+    df = df.copy()
+    dT = df["T_flow"] - df["T_return"]
+    detected = (dT < -spec["min_dT"])
+    detected = detected & (df["HP_elec_W"] > spec["min_elec_W"]) if "HP_elec_W" in df else detected & False
+    flag = df[spec["flag"]] if spec["flag"] and spec["flag"] in df else pd.Series(np.nan, index=df.index)
+    on = (flag > 0.5).where(flag.notna(), detected).astype(bool)
+    df["defrost"] = on.astype(float)
+    fix = on & _before(df.index, spec["until"])
+    df.loc[fix, "HP_heat_W"] = spec["W_per_K"] * dT[fix]
+    if "HP_heat_per_K" in df:
+        df.loc[fix, "HP_heat_per_K"] = 0.0
+    return df
 
 
 def _heat_per_K(df: pd.DataFrame, min_dT: float, until=None) -> pd.Series:
@@ -171,6 +218,9 @@ def load_states(db, cfg: HassConfig, step: str = "15min") -> pd.DataFrame:
         if "HP_heat_W" in df:
             df["HP_heat_per_K"] = _heat_per_K(df, 0.3, cfg.water_offset_until)
         df = correct_water_temps(df, cfg.water_sensor_offset_K, cfg.water_offset_side, cfg.water_offset_until)
+        defrost = _defrost_spec(cfg.defrost)
+        if defrost and "HP_heat_W" in df:
+            df = correct_defrost(df, defrost)
     if cfg.flow_column in df:
         circ = df[cfg.flow_column] > cfg.circulating_above
         if "T_flow" in df:
@@ -241,8 +291,6 @@ def load_statistics(db, cfg: HassConfig, start=None, end=None, step: str = "15mi
         h = h[h.index >= _utc(start)]
     if end is not None:
         h = h[h.index < _utc(end)]
-    if len(h.index) == 0:
-        raise ValueError(f"load_statistics: no statistics between {start} and {end}")
     if len(h.index) == 0:
         raise ValueError(f"load_statistics: no statistics between {start} and {end}")
     # a complete hourly grid, so counter differences across a gap stay missing (not lumped)

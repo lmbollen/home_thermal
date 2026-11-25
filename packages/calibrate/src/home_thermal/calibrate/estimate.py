@@ -17,6 +17,7 @@ import pandas as pd
 from home_thermal.core import (
     Network,
     emitter_heat,
+    floor_caps,
     free_gains,
     initial_state,
     prepare,
@@ -46,7 +47,7 @@ def kalman(net: Network, df: pd.DataFrame, noise: FilterNoise | None = None):
     Valve-mounted sensors are predicted as air + their instantaneous warming; the sensor lag of
     the simulation (valve_sensor_tau_h) is not a filter state, a small approximation."""
     nz = noise or FilterNoise()
-    df = prepare(df)
+    df = floor_caps(net.cfg, prepare(df))
     dt = step_seconds(df)
     Ad, Bb, Bq = net.discretise(dt)
     meas = measured(net)

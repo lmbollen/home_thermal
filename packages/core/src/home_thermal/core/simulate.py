@@ -8,7 +8,7 @@ import pandas as pd
 
 from .data import check_inputs, prepare, step_seconds
 from .network import Network
-from .physics import background_gain, dhw_heat, emitter_heat, outdoor_pipe_loss, solar_gain
+from .physics import background_gain, dhw_heat, emitter_heat, floor_caps, outdoor_pipe_loss, solar_gain
 
 
 class StepController(Protocol):
@@ -28,6 +28,7 @@ def simulate(net: Network, df: pd.DataFrame, x0: np.ndarray | None = None,
     record: also return a dict with every heat input per step and node (for `energy_balance`)."""
     df = prepare(df)
     check_inputs(net.cfg, df)
+    df = floor_caps(net.cfg, df)
     dt = step_seconds(df)
     Ad, Bb, Bq = net.discretise(dt)
     N = len(df)

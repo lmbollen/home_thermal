@@ -23,6 +23,7 @@ from .params import (
 )
 from .physics import (
                       emitter_heat,
+                      floor_caps,
                       free_gains,
                       outdoor_pipe_loss,
                       radiator_heat,
@@ -36,7 +37,7 @@ from .simulate import initial_state, simulate
 __all__ = [
     "Boiler", "check_inputs", "check_names", "check_sensors", "complete", "ConfigError", "coupling",
     "DATA_TERM_PARAMS", "default_free", "defaults", "dhw_hours", "emitter_heat", "energy_balance",
-    "free_gains", "gas_power", "HEAT_PUMP_PARAMS", "HeatPump", "initial_state", "load_house", "Network",
+    "floor_caps", "free_gains", "gas_power", "HEAT_PUMP_PARAMS", "HeatPump", "initial_state", "load_house", "Network",
     "normalise", "outdoor_pipe_loss", "Param", "parameter_set", "prepare", "radiator_heat", "read_csv",
     "required_columns",
     "sensor_lag", "sensor_temps", "simulate", "simulate_detailed", "step_seconds", "valve_sensor_warming",

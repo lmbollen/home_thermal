@@ -122,6 +122,10 @@ def parameter_set(cfg: dict) -> dict[str, Param]:
         out["m_air"] = GENERIC["m_air"]
     if any("solar" in el for el in elements):
         out["g_sol"] = GENERIC["g_sol"]
+    for z, pp in em["pipes"].items():               # heating pipes running through a room
+        ua = float(pp["length_m"] * pp["W_per_mK"])
+        out[f"UA_pipe_{z}"] = Param(ua, 0.5 * ua, "lin", (0.0, max(5.0 * ua, 1.0)), False,
+                                    f"heating pipes through {z}: heat per K of water above the room, W/K")
     if em["floor_heating"]:
         out["m_ufh"] = GENERIC["m_ufh"]
         for u in em["floor_heating"].values():

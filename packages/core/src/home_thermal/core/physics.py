@@ -79,8 +79,14 @@ def emitter_heat(net: Network, x: np.ndarray, row: dict) -> tuple[np.ndarray, fl
         q_source += h
     for z, u in em["floor_heating"].items():
         s = net.iS[z]
-        h = p["m_ufh"] * u["K_ws"] * u["area"] * (tw - x[s]) * pump_fraction(net, u["pump"], row) * circ
+        cap = row.get(f"t_max:{z}")
+        tw_z = tw if cap is None or cap != cap else min(tw, cap)    # mixing valve / limiter setting
+        h = p["m_ufh"] * u["K_ws"] * u["area"] * (tw_z - x[s]) * pump_fraction(net, u["pump"], row) * circ
         q[s] += h
+        q_source += h
+    for z in em["pipes"]:
+        h = p[f"UA_pipe_{z}"] * max(tw - x[net.iA[z]], 0.0) * circ
+        q[net.iA[z]] += h
         q_source += h
     hz, ua = source_zone(net.cfg)
     if hz:
@@ -88,6 +94,25 @@ def emitter_heat(net: Network, x: np.ndarray, row: dict) -> tuple[np.ndarray, fl
         q[net.iA[hz]] += h
         q_source += h
     return q, q_source + extracted + outdoor_pipe_loss(net, row)
+
+
+def floor_caps(cfg: dict, df: pd.DataFrame) -> pd.DataFrame:
+    """df with a column `t_max:<zone>` per floor circuit with a `t_max` (its mixing valve or limiter
+    setting over time; NaN = no cap). Returns df itself if no circuit has one."""
+    caps = {z: u["t_max"] for z, u in cfg["emitters"]["floor_heating"].items() if "t_max" in u}
+    if not caps:
+        return df
+    df = df.copy()
+    for z, v in caps.items():
+        if isinstance(v, (int, float)):
+            df[f"t_max:{z}"] = float(v)
+            continue
+        col = pd.Series(np.nan, index=df.index)
+        for t, c in v:
+            t = t if df.index.tz is not None else t.tz_localize(None)
+            col[df.index >= t] = c
+        df[f"t_max:{z}"] = col
+    return df
 
 
 def outdoor_pipe_loss(net: Network, row: dict) -> float:

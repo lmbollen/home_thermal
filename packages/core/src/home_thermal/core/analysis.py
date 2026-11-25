@@ -38,10 +38,11 @@ def energy_balance(net: Network, sim: dict, start=None) -> dict:
     src = []
     for z in net.zones:
         e = Qe[:, net.iA[z]].sum() * h
-        if z in cfg["emitters"]["radiators"]:
-            src.append(("heating", f"radiator {z}", e))
-        elif z == hz:
-            src.append(("heating", f"heat source unit/pipes -> {z}", e))
+        parts = ([f"radiator {z}"] if z in cfg["emitters"]["radiators"] else []) \
+            + ([f"pipes {z}"] if z in cfg["emitters"]["pipes"] else []) \
+            + ([f"heat source unit/pipes -> {z}"] if z == hz else [])
+        if parts:
+            src.append(("heating", " + ".join(parts), e))
     for z in net.ufh_zones:
         src.append(("heating", f"floor heating {z}", Qe[:, net.iS[z]].sum() * h))
     losses = []

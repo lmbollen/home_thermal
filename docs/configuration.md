@@ -115,7 +115,9 @@ emitters:
     bedroom: {q50: 1200, n: 1.3, valve: V_bedroom, sensor_on_valve: true}
     kitchen: {q50: 900, valve: 100}        # no valve data: always fully open
   floor_heating:
-    living: {area: 30, K_ws: 15, h_sa: 10.8, c: 130000, pump: P_living}
+    living: {area: 30, K_ws: 15, h_sa: 10.8, c: 130000, pump: P_living, t_max: 35}
+  pipes:                                   # heating pipes running through a room
+    bedroom: {length_m: 6, W_per_mK: 0.8}
 ```
 
 **Radiators** (one per zone; combine several radiators in a zone by adding their q50):
@@ -143,8 +145,15 @@ emitters:
 | `h_sa` | 10.8 bare screed/tiles; ~7 laminate; ~5 parquet or carpet | slab surface → room, W/m²K (put the floor covering here) |
 | `c` | 130 000 (6-7 cm screed) | slab heat capacity, J/m²K |
 | `pump` | `always` (default) | data column with the circuit pump's on-fraction 0-1, or `always` |
+| `t_max` | none | the circuit's mixing valve or limiter setting, °C: the floor gets the water at no more than this. A number, or changes over time: `{"2026-11-01": 30, "2026-11-25T18:15:00Z": 40}` (each from that time on; no cap before the first) |
 
 Each pump column gets a parameter `f_off_<pump>`: the residual flow while the pump is off.
+
+**Pipes** (`pipes`, per zone): heating pipes that run through a room give heat there whenever water
+circulates, also while that room's own valve is shut: `UA_pipe_<zone>` × (T_water − T_room), with
+UA = `length_m` × `W_per_mK` as the prior (fitted by default). Take the length of flow + return
+together; `W_per_mK` ≈ 0.6-1.0 for bare 15-22 mm copper, 0.2-0.3 insulated, lower again in a floor
+or wall. A room that warms while its valve is shut and the water is hot is the typical sign.
 
 ## heat_pump
 

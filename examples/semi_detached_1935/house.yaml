@@ -114,11 +114,21 @@ emitters:
     badkamer:   {q50: 800,  n: 1.25, valve: V_badkamer,   sensor_on_valve: true}   # towel radiator
   # K_ws: water->slab W/m2K, h_sa: slab->air W/m2K, c: slab heat capacity J/m2K.
   # pump: data column with the circulation pump's on-fraction, or 'always'.
+  # The manifolds have thermostatic mixing valves (30 C until 25 Nov 2026 ~19:15 local, 40 C since)
+  # and the bathroom loop a 25 C limiter on its supply. Modelled as t_max caps they made the fit
+  # WORSE on the Nov 2026 data (living room 0.40 -> 0.58 K RMSE; bathroom at 25 or 30 C: 0.87 ->
+  # 1.17-1.62 K), so they are left out: the floors behave as if they got the full water temperature.
+  # To try them: t_max: {"2026-11-01": 30, "2026-11-25T18:15:00Z": 40} per manifold circuit.
   floor_heating:
     woonkamer: {area: 40.0, K_ws: 15, h_sa: 10.8, c: 130000, pump: UFH_A}
     bijkeuken: {area: 9.9,  K_ws: 15, h_sa: 10.8, c: 130000, pump: UFH_B}
     berging:   {area: 14.0, K_ws: 15, h_sa: 10.8, c: 130000, pump: UFH_B}
     badkamer:  {area: 4.0,  K_ws: 15, h_sa: 10.8, c: 60000,  pump: always}
+  # The bedroom warms while its own valve is shut and the water is hot: pipes to the upstairs
+  # radiators (or a valve that doesn't close). Fitted ~11 W/K on Nov 2026 data: bedroom RMSE
+  # 1.19 -> 0.92 K, every other room and the heat meter better too. The walk-in closet got 0 W/K.
+  pipes:
+    slaapkamer: {length_m: 4, W_per_mK: 1.0}
 
 # Air-water heat pump (7 kW R290 monoblock). Its indoor parts and bare pipes stand in the shed.
 heat_pump:

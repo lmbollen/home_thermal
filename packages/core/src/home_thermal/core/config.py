@@ -11,6 +11,7 @@ import copy
 import math
 from pathlib import Path
 
+import pandas as pd
 import yaml
 
 ENVELOPE_KINDS = ("wall", "roof", "window", "door", "floor", "party")
@@ -32,9 +33,9 @@ TOP_KEYS = {"name", "zones", "envelope", "internal", "emitters", "heat_pump", "b
             "background_gain", "boundaries", "thermal_mass", "parameters", "controls"}
 ZONE_KEYS = {"area", "volume", "ach", "sensor", "occupied", "in_house_loss"}
 ELEMENT_KEYS = {"kind", "area", "U", "solar", "ufh"}
-EMITTER_KEYS = {"radiator_model", "valve_sensor_tau_h", "radiators", "floor_heating"}
+EMITTER_KEYS = {"radiator_model", "valve_sensor_tau_h", "radiators", "floor_heating", "pipes"}
 RADIATOR_KEYS = {"q50", "n", "valve", "sensor_on_valve", "flow_lph"}
-FLOOR_KEYS = {"area", "K_ws", "h_sa", "c", "pump"}
+FLOOR_KEYS = {"area", "K_ws", "h_sa", "c", "pump", "t_max"}
 HEAT_PUMP_KEYS = {"zone", "dT_cond", "dT_evap", "standby_W", "running_min_W", "outdoor_pipes"}
 OUTDOOR_PIPE_KEYS = {"length_m", "W_per_mK"}
 HP_DEFAULTS = {"dT_cond": 3.0, "dT_evap": 6.0, "standby_W": 7.0, "running_min_W": 50.0}
@@ -165,6 +166,7 @@ def _check_emitters(c):
     _number(em, "valve_sensor_tau_h", "emitters", positive=True)
     em["radiators"] = em.get("radiators") or {}
     em["floor_heating"] = em.get("floor_heating") or {}
+    em["pipes"] = em.get("pipes") or {}
     if em["radiator_model"] not in RADIATOR_MODELS:
         raise ConfigError(f"emitters.radiator_model: must be one of {RADIATOR_MODELS}")
     for z, r in em["radiators"].items():
@@ -199,6 +201,36 @@ def _check_emitters(c):
             raise ConfigError(f"{where}.pump: a data column name or 'always'")
         if u["pump"].lower() == "always":
             u["pump"] = "always"
+        if "t_max" in u:
+            u["t_max"] = _t_max(u["t_max"], f"{where}.t_max")
+    for z, pp in em["pipes"].items():
+        where = f"emitters.pipes.{z}"
+        _zone(z, zones, where)
+        pp = _mapping(pp, where)
+        _keys(pp, OUTDOOR_PIPE_KEYS, where)
+        for k in ("length_m", "W_per_mK"):
+            _number(pp, k, where, positive=True)
+
+
+def _t_max(v, where):
+    """Mixing-valve / limiter setting of a floor circuit: a number (C), or {time: C} changes, each
+    holding from that time on (no cap before the first). Returns a number or a sorted list of
+    (UTC Timestamp, C)."""
+    if _is_number(v):
+        return float(v)
+    if not isinstance(v, dict) or not v:
+        raise ConfigError(f"{where}: a temperature (C) or a mapping {{time: temperature}}")
+    out = []
+    for t, c in v.items():
+        try:
+            ts = pd.Timestamp(t)
+        except (ValueError, TypeError):
+            raise ConfigError(f"{where}: {t!r} is not a time (use e.g. '2026-11-25T18:15:00Z')") from None
+        ts = ts.tz_localize("UTC") if ts.tzinfo is None else ts.tz_convert("UTC")
+        if not _is_number(c):
+            raise ConfigError(f"{where}.{t}: a temperature (C), got {c!r}")
+        out.append((ts, float(c)))
+    return sorted(out)
 
 
 def _check_heat_sources(c):

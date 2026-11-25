@@ -97,3 +97,21 @@ def test_example_installation_builds():
     res = c.solve(ctx)
     assert res.flow["heat_pump"] > 0.1
     assert sum(res.flow[b] for b in ("main", "bypass")) == pytest.approx(res.flow["heat_pump"], rel=1e-6)
+
+
+def test_pump_on_condition_survives_yaml():
+    # PyYAML reads the bare key `on:` as True; the pump must still follow its column
+    c = build_circuit(SPEC)
+    hp = c.branches["hp"].elements[0]
+    assert callable(hp.on)
+    assert hp.is_on({"run": 1}) and not hp.is_on({"run": 0})
+    stopped = c.solve({"run": 0, "T_flow": 40.0, "V": 60, "T_room": 20.0, "slab": 24.0})
+    assert abs(stopped.flow["hp"]) < 0.3        # only what the ufh pump pulls through the stopped one
+
+
+def test_example_pumps_follow_their_columns():
+    c = build_circuit(load_spec(EXAMPLE))
+    for br, col in (("heat_pump", "HP_elec_W"), ("edel", "DHW_W")):
+        pump = c.branches[br].elements[0]
+        assert callable(pump.on), br
+        assert not pump.is_on({col: 0})

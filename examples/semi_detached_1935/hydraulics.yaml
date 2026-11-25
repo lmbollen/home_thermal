@@ -23,7 +23,12 @@ parameters:
   bath_kv:    {value: 0.15, bounds: [0.02, 1.0], note: "bathroom floor loop, kv"}
   bath_u_min: {value: 0.1, bounds: [0.01, 1.0], note: "bathroom 25 C limiter: opening it keeps when hot"}
   tmv_kv:     {value: 1.6, bounds: [0.3, 6.0],  note: "manifold mixing valve, kv"}
-  ufh_speed:  {value: 0.8, bounds: [0.4, 1.0],  note: "manifold pumps' current setting (unknown), speed fraction"}
+  # Manifold pumps (owner, 25 Nov 2026): living room Para HU 25/6-43/SC on constant differential pressure
+  # level III; utility room Para 25/6-43/SC on variable differential pressure level II. Head per level
+  # not yet read from the Wilo datasheet: priors below, wide bounds, to calibrate. The living-room pump's
+  # plug went from ~17.6 W to ~32 W running on 23 Nov 2026: its setting most likely changed then.
+  ufh_a_head: {value: 5.0, bounds: [2.0, 6.2], note: "living-room manifold pump, dp-c level III head, m"}
+  ufh_b_head: {value: 3.5, bounds: [1.0, 6.2], note: "utility manifold pump, dp-v level II head at full flow, m"}
   bypass_kv:  {value: 1.5, bounds: [0.2, 5.0],  note: "overflow valve fully open, kv"}
 
 branches:
@@ -43,7 +48,7 @@ branches:
       to: return_main
       t_set: 30
       kv: $tmv_kv
-      pump: {curve: wilo-para-25-6, mode: speed, setting: $ufh_speed, on: {column: UFH_A}}
+      pump: {curve: wilo-para-25-6, mode: dp-c, setting: $ufh_a_head, on: {column: UFH_A}}
       loops: {kv: 1.0, UA: 240, space: slab_woonkamer}
   - mixing_group:
       name: ufh_b
@@ -51,7 +56,7 @@ branches:
       to: return_main
       t_set: 30
       kv: $tmv_kv
-      pump: {curve: wilo-para-25-6, mode: speed, setting: $ufh_speed, on: {column: UFH_B}}
+      pump: {curve: wilo-para-25-6, mode: dp-v, setting: $ufh_b_head, on: {column: UFH_B}}
       loops:
         - {name: bijkeuken, kv: 0.5, UA: 59, space: slab_bijkeuken}
         - {name: berging, kv: 0.6, UA: 84, space: slab_berging}

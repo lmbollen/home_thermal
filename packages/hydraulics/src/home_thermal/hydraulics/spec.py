@@ -48,9 +48,18 @@ class SpecError(ValueError):
     """The circuit specification is invalid."""
 
 
+def _yaml_keys(v):
+    """YAML 1.1 (PyYAML) reads the bare key `on:` as the boolean True: turn it back into 'on'."""
+    if isinstance(v, dict):
+        return {("on" if k is True else "off" if k is False else k): _yaml_keys(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_yaml_keys(x) for x in v]
+    return v
+
+
 def load_spec(path: str | Path) -> dict:
     with open(path, encoding="utf-8") as f:
-        spec = yaml.safe_load(f)
+        spec = _yaml_keys(yaml.safe_load(f))
     if not isinstance(spec, dict) or "branches" not in spec or "reference" not in spec:
         raise SpecError(f"{path}: needs 'reference' and 'branches'")
     return spec
@@ -62,6 +71,7 @@ def parameter_values(spec: dict) -> dict:
 
 def build_circuit(spec: dict, values: dict | None = None) -> Circuit:
     """A Circuit from a specification; `values` override parameter values by name."""
+    spec = _yaml_keys(spec)
     vals = {**parameter_values(spec), **(values or {})}
     unknown = set(values or {}) - set(parameter_values(spec))
     if unknown:
